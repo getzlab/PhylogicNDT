@@ -373,7 +373,7 @@ class TimingSample(object):
                     regions_supporting_WGD.append(cn_state)
                 if cn_state.cn_a1 >= 2 and cn_state.cn_a2 >= 2:
                     regions_both_arms_gained.append(cn_state)
-            if len(regions_both_arms_gained) >= self.engine.min_chr_doubling and len(regions_supporting_WGD) * 2 >= \
+            if len(regions_both_arms_gained) >= self.engine.min_chr_doubling or len(regions_supporting_WGD) * 2 >= \
                     len(self.arm_regions) - len(self.missing_arms):
                 supporting_arm_states = [TimingCNState([self], s.chrN, s.arm, (s.cn_a1, s.cn_a2), s.purity, supporting_muts=s.supporting_muts) for
                                          s in supporting_arm_states]
