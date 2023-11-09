@@ -12,11 +12,12 @@ class TimingEngine(object):
     Class for holding samples
     """
     def __init__(self, patient, cn_state_whitelist=_cn_state_whitelist, chromosomes=_chromosomes,
-                 arms=_arms, ref_build="hg19", min_supporting_muts=3):
+                 arms=_arms, ref_build="hg19", min_supporting_muts=3, min_chr_doubling=5):
         self.patient = patient
         self.cn_state_whitelist = cn_state_whitelist
         self.arm_regions = list(itertools.product(chromosomes, arms))
         self.min_supporting_muts = min_supporting_muts
+        self.min_chr_doubling = min_chr_doubling
         self.ref_build = ref_build
         self.sample_list = []
         for sample in self.patient.sample_list:
@@ -372,7 +373,7 @@ class TimingSample(object):
                     regions_supporting_WGD.append(cn_state)
                 if cn_state.cn_a1 >= 2 and cn_state.cn_a2 >= 2:
                     regions_both_arms_gained.append(cn_state)
-            if len(regions_both_arms_gained) >= 5 and len(regions_supporting_WGD) * 2 >= \
+            if len(regions_both_arms_gained) >= self.min_chr_doubling and len(regions_supporting_WGD) * 2 >= \
                     len(self.arm_regions) - len(self.missing_arms):
                 supporting_arm_states = [TimingCNState([self], s.chrN, s.arm, (s.cn_a1, s.cn_a2), s.purity, supporting_muts=s.supporting_muts) for
                                          s in supporting_arm_states]

@@ -433,6 +433,12 @@ def build_parser():
                         dest='min_supporting_muts',
                         default=3,
                         help='Minimum number of supporting mutations to time a copy number event')
+    single_patient_timing.add_argument('-min_chr_doubling',
+                        type=int,
+                        action='store',
+                        dest='min_chr_doubling',
+                        default=5,
+                        help='Minimum number of chromosomes (both arms) gained to define WGD')
     single_patient_timing.set_defaults(func=SinglePatientTiming.SinglePatientTiming.run_tool)
 
     leaguemodel = subparsers.add_parser("LeagueModel", help="Time somatic events across a cohort.",
