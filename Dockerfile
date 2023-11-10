@@ -7,20 +7,20 @@ RUN python2 -m pip install setuptools wheel
 RUN python2 -m pip install intervaltree==2.1.0 scikit-learn==0.18.1 networkx==1.11 seaborn numpy scipy matplotlib pandas
 RUN pip install -e git+https://github.com/rmcgibbo/logsumexp.git#egg=sselogsumexp
 
-COPY BuildTree /build/PhylogicNDT/
-COPY Cluster /build/PhylogicNDT/
-COPY data /build/PhylogicNDT/
-COPY ExampleData /build/PhylogicNDT/
-COPY ExampleRuns /build/PhylogicNDT/
-COPY GrowthKinetics /build/PhylogicNDT/
-COPY LeagueModel /build/PhylogicNDT/
-COPY output /build/PhylogicNDT/
-COPY PhylogicSim /build/PhylogicNDT/
-COPY SinglePatientTiming /build/PhylogicNDT/
-COPY utils /build/PhylogicNDT/
-COPY LICENSE /build/PhylogicNDT/
-COPY PhylogicNDT.py /build/PhylogicNDT/
-
 WORKDIR /build/PhylogicNDT/
+
+COPY BuildTree BuildTree/
+COPY Cluster Cluster/
+COPY data data/
+COPY ExampleData ExampleData/
+COPY ExampleRuns ExampleRuns/
+COPY GrowthKinetics GrowthKinetics/
+COPY LeagueModel LeagueModel/
+COPY output output/
+COPY PhylogicSim PhylogicSim/
+COPY SinglePatientTiming SinglePatientTiming/
+COPY utils utils/
+COPY LICENSE LICENSE/
+COPY PhylogicNDT.py .
 
 ENV PATH=$PATH:/build/PhylogicNDT/
