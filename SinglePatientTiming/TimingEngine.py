@@ -12,13 +12,14 @@ class TimingEngine(object):
     Class for holding samples
     """
     def __init__(self, patient, cn_state_whitelist=_cn_state_whitelist, chromosomes=_chromosomes,
-                 arms=_arms, ref_build="hg19", min_supporting_muts=3, min_chr_doubling=5):
+                 arms=_arms, min_supporting_muts=3, min_chr_doubling=5, call_hyperdiploidy=False):
         self.patient = patient
         self.cn_state_whitelist = cn_state_whitelist
         self.arm_regions = list(itertools.product(chromosomes, arms))
         self.min_supporting_muts = min_supporting_muts
         self.min_chr_doubling = min_chr_doubling
-        self.ref_build = ref_build
+        self.call_hyperdiploidy = call_hyperdiploidy
+        self.ref_build = self.patient.ref_build  # ref_build is already sent by patient class
         self.sample_list = []
         for sample in self.patient.sample_list:
             timing_sample = TimingSample(sample, self)
@@ -27,7 +28,7 @@ class TimingEngine(object):
         self.timeable_muts = {}
         self.all_cn_events = {}
         self.get_concordant_cn_states()
-        self.WGD = None
+        self.WGD = None # Definition of WGD varies in Sample engine (to include HRD for instance)
         self.call_wgd()
         self.mutations = {}
         self.get_mutations()
