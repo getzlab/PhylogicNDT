@@ -439,6 +439,10 @@ def build_parser():
                         dest='min_chr_doubling',
                         default=5,
                         help='Minimum number of chromosomes gained to define WGD')
+    single_patient_timing.add_argument('-hrd', '--call_hrd',
+                        action='store_true',
+                        dest='call_hrd',
+                        help='(development) allow grouping of chromosome trisomies as a replacement to WGD')
     single_patient_timing.set_defaults(func=SinglePatientTiming.SinglePatientTiming.run_tool)
 
     leaguemodel = subparsers.add_parser("LeagueModel", help="Time somatic events across a cohort.",
