@@ -269,7 +269,6 @@ class TimingSample(object):
         self.n_hrd_chr = 0
         if self.engine.call_hyperdiploidy:
             self.call_hrd()
-            self.WGD = TimingWGD(supporting_arm_states=self.supporting_arm_states_HRD)
         else:
             self.call_wgd()
         self.get_arm_level_cn_events()
@@ -441,6 +440,7 @@ class TimingSample(object):
                               s.chrN, s.arm, (s.cn_a1, s.cn_a2),
                               s.purity, supporting_muts=s.supporting_muts)
                 for s in self.supporting_arm_states_HRD]
+            self.WGD = TimingWGD(supporting_arm_states=self.supporting_arm_states_HRD)
             for cn_state in self.cn_states.values():
                 cn_state.call_events(wgd=False) # baseline 1 for non-trisomic chromosomes under HRD hypothesis
 
