@@ -31,6 +31,7 @@ class TimingEngine(object):
         self.all_cn_events = {}
         self.get_concordant_cn_states()
         self.WGD = None # Definition of WGD varies in Sample engine (to include HRD for instance)
+        self.regions_to_inspect = self.arm_regions_to_wgs_hrd_set()
         self.call_wgd()
         self.mutations = {}
         self.get_mutations()
@@ -95,6 +96,14 @@ class TimingEngine(object):
                                                       supporting_muts=supporting_muts)
                     self.concordant_cn_states[chrN + arm] = multisample_state
 
+    def arm_regions_to_wgs_hrd_set(self, hrd_chr=None):
+        if self.call_hyperdiploidy and hrd_chr is None:
+            hrd_chr = ['3', '5', '7', '9', '11', '15', '19', '21']
+        if self.call_hyperdiploidy:
+            return list([ i for i in self.arm_regions if i[0] in hrd_chr])
+        else:
+            return self.arm_regions
+
     def call_wgd(self, concordance_threshold=.8, tol=.2, CNGroup="WGD"):  # TODO: try other concordance thresholds
         # TODO separate wgd and hrd
         """
@@ -115,7 +124,7 @@ class TimingEngine(object):
                 min_pi) < concordance_threshold:
             return  # if not samples have WGD event or concordance is below threshold do not call WGD
         regions_supporting_WGD = []
-        for chrN, arm in self.arm_regions:
+        for chrN, arm in self.regions_to_inspect:
             region = str(chrN) + arm
             if region in self.concordant_cn_states:
                 cn_state = self.concordant_cn_states[region]
