@@ -208,17 +208,23 @@ class TimingEngine(object):
         subclonal_dist[100] = 1.
         if self.WGD is not None:
             self.WGD.get_pi_dist()
+
+        if self.WGD is not None and not self.call_hyperdiploidy:
             for mut in self.mutations.values():
                 if mut.is_clonal:
                     mut.get_pi_dist(self.WGD)
             for cn_event_name in self.all_cn_events:
+                # a more elegant solution would be to bring baseline CN
+                # and set of WGD candidates here
+                # separate WGD should maybe not be necessary
                 for cn_event in self.all_cn_events[cn_event_name]:
                     if not cn_event.is_clonal:
                         cn_event.pi_dist = subclonal_dist
+#                    if self.call_hyperdiploidy: actually don't need >3 copies, and
                     elif cn_event.Type.endswith('gain'):
-                        cn_event.get_pi_dist_for_higher_gain(self.WGD)
+                            cn_event.get_pi_dist_for_higher_gain(self.WGD)
                     elif cn_event.Type.endswith('loss'):
-                        cn_event.get_pi_dist_for_loss(self.WGD)
+                            cn_event.get_pi_dist_for_loss(self.WGD)
         else:
             for cn_event_name in self.all_cn_events:
                 for cn_event in self.all_cn_events[cn_event_name]:
