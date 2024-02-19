@@ -91,7 +91,7 @@ class TumorSample:
                                                use_indels=use_indels,
                                                _additional_muts=_additional_muts)  # a list of SomMutation objects
 
-        self.CnProfile = self._resolve_CnEvents(seg_file, input_type=seg_input_type)
+        self.CnProfile = self._resolve_CnEvents(seg_file, input_type=seg_input_type, purity=purity)
 
         self.ClustersPostMarginal = None  # format F[Cluster] = CCF post hist
 
