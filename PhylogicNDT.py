@@ -27,7 +27,7 @@ import PhylogicSim.Simulations
 import BuildTree.BuildTree  # Tree Building Tool
 import BuildTree.CellPopulation
 import GrowthKinetics.GrowthKinetics
-#import SinglePatientTiming.SinglePatientTiming
+import SinglePatientTiming.SinglePatientTiming
 import LeagueModel.LeagueModel
 
 
@@ -124,6 +124,13 @@ def build_parser():
                             action="store_true",
                             dest='buildtree',
                             help='Run the BuildTree Module right after clustering and generate joint report')
+
+    # run Cluster and BuildTree  together
+    clustering.add_argument('--coding_only', '-co',
+                            action="store_true",
+                            dest='coding_only',
+                            help='Run clustering with nonsilent, coding mutations only (MAF Variant_Classification field)')
+
 
     # option for specifying PoN - will be used to append to blacklist.
     clustering.add_argument('--PoN',
@@ -415,25 +422,25 @@ def build_parser():
                              help='TSV File of purity values for each sample, and optionally a 2/3/4 column with a, b and n values. Number of samples needs to match ns.')
     simulations.set_defaults(func=PhylogicSim.Simulations.run_tool)
 
-#    timing = subparsers.add_parser("Timing", help="Time somatic events in one or multiple samples.",
-#                                   parents=[base_parser])
-#    timing.add_argument('-min_supporting_muts',
-#                        type=int,
-#                        action='store',
-#                        dest='min_supporting_muts',
-#                        default=3,
-#                        help='Minimum number of supporting mutations to time a copy number event')
-#    timing.set_defaults(func=SinglePatientTiming.SinglePatientTiming.run_tool)
+    timing = subparsers.add_parser("Timing", help="Time somatic events in one or multiple samples.",
+                                   parents=[base_parser])
+    timing.add_argument('-min_supporting_muts',
+                        type=int,
+                        action='store',
+                        dest='min_supporting_muts',
+                        default=3,
+                        help='Minimum number of supporting mutations to time a copy number event')
+    timing.set_defaults(func=SinglePatientTiming.SinglePatientTiming.run_tool)
 
-#    single_patient_timing = subparsers.add_parser("SinglePatientTiming", help="Time somatic events in one or multiple samples.",
-#                                   parents=[base_parser])
-#    single_patient_timing.add_argument('-min_supporting_muts',
-#                        type=int,
-#                        action='store',
-#                        dest='min_supporting_muts',
-#                        default=3,
-#                        help='Minimum number of supporting mutations to time a copy number event')
-#    single_patient_timing.set_defaults(func=SinglePatientTiming.SinglePatientTiming.run_tool)
+    single_patient_timing = subparsers.add_parser("SinglePatientTiming", help="Time somatic events in one or multiple samples.",
+                                   parents=[base_parser])
+    single_patient_timing.add_argument('-min_supporting_muts',
+                        type=int,
+                        action='store',
+                        dest='min_supporting_muts',
+                        default=3,
+                        help='Minimum number of supporting mutations to time a copy number event')
+    single_patient_timing.set_defaults(func=SinglePatientTiming.SinglePatientTiming.run_tool)
 
     leaguemodel = subparsers.add_parser("LeagueModel", help="Time somatic events across a cohort.",
                                          parents=[base_parser])

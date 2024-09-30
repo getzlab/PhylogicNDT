@@ -40,3 +40,9 @@ MutStatus = Enum(OK="OK",
 MutType = Enum(INS="INS",
                DEL="DEL",
                SNV="SNV")
+
+_chromosomes = tuple(map(str, range(1, 23))) + ('X',)
+
+_arms = 'pq'
+
+_cn_state_whitelist = frozenset({(1., 2.), (0., 2.), (2., 2.)})

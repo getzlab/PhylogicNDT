@@ -170,7 +170,7 @@ class DpEngine:
         self.results.clust_size.append([len(cluster) for cluster in self.clusterlist])
         self.results.K.append(self.n_clusters)
 
-        print("{}({});".format(self.n_clusters, round(self.alpha, 1)),)
+        print("{} clusters, (alpha={});".format(self.n_clusters, round(self.alpha, 1)),)
         sys.stdout.flush()
 
         if resample:
