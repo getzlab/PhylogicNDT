@@ -47,7 +47,14 @@ def run_tool(args):
     patient_data.preprocess_samples()
     if args.min_supporting_muts < 1:
         raise ValueError('Invalid value for min_supporting_muts')
-    timing_engine = TimingEngine.TimingEngine(patient_data, min_supporting_muts=args.min_supporting_muts)
+    if args.min_chr_doubling < 1:
+        raise ValueError('Invalid value for min_chr_doubling, should be at least 1')
+    if not type(args.call_hrd) is bool:
+        raise ValueError('Invalid value for call_hyperdiploidy. Expecting a boolean.')
+    timing_engine = TimingEngine.TimingEngine(patient_data,
+                                              min_supporting_muts=args.min_supporting_muts,
+                                              min_chr_doubling=args.min_chr_doubling,
+                                              call_hyperdiploidy=args.call_hrd)
     timing_engine.time_events()
     phylogicoutput = PhylogicOutput()
     phylogicoutput.write_timing_tsv(timing_engine)
