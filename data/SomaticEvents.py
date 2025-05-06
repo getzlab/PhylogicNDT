@@ -239,9 +239,9 @@ class CopyNumberEvent():
     alt_cnt = ''
     prot_change = ''
 
-    def __init__(self, chrN, start, end, ccf_1d=None, ccf_hat=None, ccf_high=None, ccf_low=None, std=None,
-                 from_sample=None, seg_tree=None, clust_ccf=None, local_cn=np.nan, a1=True, mut_category='None',
-                 dupe=False):
+    def __init__(self, chrN, cn_category, start=0, end=0, arm=None, ccf_1d=None, ccf_hat=None, ccf_high=None, ccf_low=None,
+                 std=None, from_sample=None, seg_tree=None, clust_ccf=None, local_cn=np.nan, a1=True,
+                dupe=False):
 
         # try:
         # Link to sample object.
@@ -251,11 +251,11 @@ class CopyNumberEvent():
         self.chrN = chrN
         self.start = start
         self.end = end
+        self.arm = arm
         if ccf_1d:
             self.ccf_1d = ccf_1d
         else:
-            std = std if std is not None else (ccf_high - ccf_low) / 4.
-            std = max(std, .01)
+            std = std if std is not None else max((ccf_high - ccf_low) / 4., .001)
             if ccf_hat <= std:
                 self.ccf_1d = np.insert(np.zeros(100), 0, 1.)
             elif ccf_hat >= 1. - std:
@@ -275,12 +275,24 @@ class CopyNumberEvent():
 
         self.type = 'CNV'
 
-        self._var_str = ':'.join(map(str, (mut_category, chrN, start.band, end.band, 'a1' if a1 else 'a2')))
-
-        self.event_name = mut_category + str(chrN) + start.band + '-' + end.band[1:] if start != end else mut_category \
-                                                                                                          + str(
-            chrN) + start.band
+        # self._var_str = ':'.join(map(str, (cn_category, chrN, start.band, end.band, 'a1' if a1 else 'a2')))
+        #
+        # self.event_name = cn_category + str(chrN) + start.band + '-' + end.band[1:] if start != end else mut_category \
+        #                                                                                                   + str(
+        #     chrN) + start.band
+        if cn_category.startswith('Arm'):
+            gl = cn_category.split('_')[1]
+            self.event_name = gl + '_' + str(self.chrN) + self.arm
+        elif cn_category.startswith('Focal'):
+            gl = cn_category.split('_')[1]
+            self.event_name = gl + '_' + str(chrN) + start.band + '-' + end.band[1:] if start != end else gl + str(chrN) + start.band
+        elif cn_category == 'WGD':
+            self.event_name = 'WGD'
+        else:
+            raise ValueError('Invalid cn category provided: "{}"'.format(cn_category))
         self.event_name += '_' if dupe else ''
+        self._var_str = self.event_name
+
         self.cluster_assignment = None
         if a1:
             self.local_cn_a1 = local_cn
@@ -289,7 +301,7 @@ class CopyNumberEvent():
             self.local_cn_a2 = local_cn
             self.local_cn_a1 = np.nan
         self.a1 = a1
-        self.mut_category = mut_category
+        self.cn_category = cn_category
         # self.set_mut_category(mut_category, arm=arm)
 
     def __hash__(self):
@@ -434,7 +446,19 @@ class CN_SegProfile:
             @property methods: none
     """
 
-    def __init__(self, seg_file, input_type='auto', from_sample=None, ref_build = "hg19"):
+    # csize contains chromosome bp lengths
+    CSIZE = [0, 249250621, 243199373, 198022430, 191154276, 180915260, 171115067, 159138663, 146364022, 141213431,
+             135534747, 135006516, 133851895, 115169878, 107349540, 102531392, 90354753, 81195210, 78077248, 59128983,
+             63025520, 48129895, 51304566, 156040895, 57227415]
+
+    # centromeres (define arm-level lengths)
+    CENT_LOOKUP = {1: 125000000, 2: 93300000, 3: 91000000, 4: 50400000, 5: 48400000,
+                   6: 61000000, 7: 59900000, 8: 45600000, 9: 49000000, 10: 40200000,
+                   11: 53700000, 12: 35800000, 13: 17900000, 14: 17600000, 15: 19000000,
+                   16: 36600000, 17: 24000000, 18: 17200000, 19: 26500000, 20: 27500000, 21: 13200000,
+                   22: 14700000, 23: 60600000, 24: 12500000}
+
+    def __init__(self, seg_file, input_type='auto', from_sample=None):
         # try: # validate correct input
         self.chroms = list(map(str, range(1, 23)))
         self.chroms.append('X')
@@ -521,7 +545,7 @@ class CN_SegProfile:
     def _results_from_seg_file(self, seg_file, header_indeces, file_type):
 
         seg_tree = {}
-        for chrom in map(str, Enums.CENT_LOOKUP[self.ref_build].keys()):
+        for chrom in map(str, CN_SegProfile.CENT_LOOKUP.keys()):
             if chrom == '23': seg_tree['X'] = IntervalTree()
             if chrom == '24':
                 seg_tree['Y'] = IntervalTree()

@@ -27,7 +27,7 @@ def run_tool(args):
                                    PoN_file=PoN, indiv_name=args.indiv_id, artifact_whitelist=args.artifact_whitelist,
                                    min_coverage=args.min_cov, use_indels=args.use_indels,
                                    impute_missing=args.impute_missing,
-                                   driver_genes_file=args.driver_genes_file, ref_build = args.ref_build)
+                                   driver_genes_file=args.driver_genes_file)
 
     # delete_auto_bl=args.Delete_Blacklist,
     # Load sample data
@@ -76,8 +76,7 @@ def run_tool(args):
             if len(patient_data.sample_list) == args.n_samples:  # use only first N samples
                 break
 
-    if not args.disable_CNs:
-        patient_data.intersect_cn_trees()
+    patient_data.get_arm_level_cn_events()
     patient_data.preprocess_samples()
 
     # TODO: how 1D (one sample) is handeled
@@ -112,5 +111,4 @@ def run_tool(args):
         args.mutation_ccf_file = '{}.mut_ccfs.txt'.format(patient_data.indiv_name)
         args.n_iter = args.iter
         args.blacklist_cluster = None
-        args.disable_mut_shuffle = False
         BuildTree.BuildTree.run_tool(args)

@@ -45,12 +45,6 @@ def build_parser():
                              default='Indiv1',
                              help='Patient/Case ID')
 
-    base_parser.add_argument('--ref_build', '-R',
-                             type=str,
-                             action='store',
-                             default='hg19',
-                             help='Genome reference build (hg19/hg38)')
-
     # Samples information
     # Specifying samples on cmdline one-by-one in format sample_id:maf_fn:seg_fn:purity:timepoint
     base_parser.add_argument("-s", "--sample", dest='sample_data', action='append', type=str,
@@ -190,10 +184,6 @@ def build_parser():
                             default=None,
                             help='interval file with focal amp and del regions specified')
 
-    clustering.add_argument('--disable_CNs',
-                            action='store_true',
-                            help="Don't use copy number events in clustering, which can hang method indefinitely")
-
     clustering.add_argument('--Pi_k_r',
                             type=int,
                             action='store',
@@ -267,9 +257,6 @@ def build_parser():
                            dest='n_iter',
                            default=250,
                            help='number iterations')
-    buildtree.add_argument('--disable_mut_shuffle',
-                            action='store_true',
-                            help="Don't reassign mutations during tree building")
     # Specifying cluster ids to blacklist from BuildTree and CellPopulation
     buildtree.add_argument("-bc", "--blacklist_cluster",
                             dest='blacklist_cluster',

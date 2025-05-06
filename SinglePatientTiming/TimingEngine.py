@@ -5,7 +5,16 @@ import scipy.stats
 import scipy.interpolate
 from scipy.special import logsumexp
 import random
-from data.Enums import CSIZE, CENT_LOOKUP, _chromosomes, _arms, _cn_state_whitelist
+from data.Enums import CSIZE, CENT_LOOKUP
+
+#TODO: get rid of these globals
+_chromosomes = tuple(map(str, range(1, 23))) + ('X',)
+_arms = 'pq'
+_cn_state_whitelist = frozenset({(1., 2.), (0., 2.), (2., 2.)})
+CSIZE = dict(zip(_chromosomes, CSIZE))
+CENT_LOOKUP = {str(c): v for c, v in CENT_LOOKUP.items()}
+CENT_LOOKUP['X'] = CENT_LOOKUP['23']
+
 
 
 class TimingEngine(object):
@@ -250,7 +259,6 @@ class TimingSample(object):
     """
     class for holding a sample
     """
-
     def __init__(self, sample, engine, cn_state_whitelist=_cn_state_whitelist,
                  chromosomes=_chromosomes, arms=_arms):
         self.sample = sample
@@ -327,9 +335,6 @@ class TimingSample(object):
                     self.concordant_mutation_intervaltree[mut.chrN][mut.pos:mut.pos + 1] = timing_mut
 
     def call_arm_level_cn_states(self, size_threshold=.4, concordant_states=None, tol=.2):
-        centromeres = {str(c): v for c, v in CENT_LOOKUP[self.ref_build].items()}
-        centromeres['X'] = centromeres['23']
-        chromosome_sizes = dict(zip(self._chromosomes, CSIZE[self.ref_build]))
         if concordant_states is None:
             self.cn_states = {}
         else:
@@ -337,7 +342,7 @@ class TimingSample(object):
         self.missing_arms = []
         full_segtree = self.CnProfile
         for chrN, arm in self.arm_regions:
-            centromere = centromeres[chrN]
+            centromere = CENT_LOOKUP[chrN]
             if arm == 'p':
                 arm_segtree = full_segtree[chrN][:centromere]
                 start = 0
@@ -345,7 +350,7 @@ class TimingSample(object):
             else:
                 arm_segtree = full_segtree[chrN][centromere:]
                 start = centromere
-                end = chromosome_sizes[chrN]
+                end = CSIZE[chrN]
             true_arm_bp = end - start
             arm_bp = 0
             state_bps = {}

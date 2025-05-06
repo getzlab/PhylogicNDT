@@ -11,7 +11,7 @@ def run_tool(args):
 
     patient_data = Patient(artifact_blacklist=args.artifact_blacklist,
                            indiv_name=args.indiv_id, artifact_whitelist=args.artifact_whitelist,
-                           driver_genes_file=args.driver_genes_file, ref_build=args.ref_build)
+                           driver_genes_file=args.driver_genes_file)
 
     if args.sif:  # if sif file is specified
         with open(args.sif, 'r') as sif_file:
