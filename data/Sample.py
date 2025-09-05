@@ -356,8 +356,9 @@ class TumorSample:
         dupl_removed = list(collections.OrderedDict.fromkeys(mutation_list))
         if len(dupl_removed) != len(mutation_list):
             sample_name = self.sample_name if self.sample_name is not None else ''
-            logging.warning("Duplicate mutations found in sample", sample_name + ":")
-            logging.warning("Removed", len(mutation_list) - len(dupl_removed), "mutations.")
+            logging.warning("Duplicate mutations found in sample %s :", sample_name)
+            n_removed = len(mutation_list) - len(dupl_removed)
+            logging.warning("Removed %s mutations.", n_removed)
             mutation_list = dupl_removed
         return mutation_list
 
