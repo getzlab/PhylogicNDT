@@ -45,12 +45,6 @@ def build_parser():
                              default='Indiv1',
                              help='Patient/Case ID')
 
-    base_parser.add_argument('--ref_build', '-R',
-                             type=str,
-                             action='store',
-                             default='hg19',
-                             help='Genome reference build (hg19/hg38)')
-
     # Samples information
     # Specifying samples on cmdline one-by-one in format sample_id:maf_fn:seg_fn:purity:timepoint
     base_parser.add_argument("-s", "--sample", dest='sample_data', action='append', type=str,
@@ -125,13 +119,6 @@ def build_parser():
                             dest='buildtree',
                             help='Run the BuildTree Module right after clustering and generate joint report')
 
-    # run Cluster and BuildTree  together
-    clustering.add_argument('--coding_only', '-co',
-                            action="store_true",
-                            dest='coding_only',
-                            help='Run clustering with nonsilent, coding mutations only (MAF Variant_Classification field)')
-
-
     # option for specifying PoN - will be used to append to blacklist.
     clustering.add_argument('--PoN',
                             type=str,
@@ -196,10 +183,6 @@ def build_parser():
                             dest='gistic_fn',
                             default=None,
                             help='interval file with focal amp and del regions specified')
-
-    clustering.add_argument('--disable_CNs',
-                            action='store_true',
-                            help="Don't use copy number events in clustering, which can hang method indefinitely")
 
     clustering.add_argument('--Pi_k_r',
                             type=int,
@@ -274,9 +257,6 @@ def build_parser():
                            dest='n_iter',
                            default=250,
                            help='number iterations')
-    buildtree.add_argument('--disable_mut_shuffle',
-                            action='store_true',
-                            help="Don't reassign mutations during tree building")
     # Specifying cluster ids to blacklist from BuildTree and CellPopulation
     buildtree.add_argument("-bc", "--blacklist_cluster",
                             dest='blacklist_cluster',
@@ -440,6 +420,16 @@ def build_parser():
                         dest='min_supporting_muts',
                         default=3,
                         help='Minimum number of supporting mutations to time a copy number event')
+    single_patient_timing.add_argument('-min_chr_doubling',
+                        type=int,
+                        action='store',
+                        dest='min_chr_doubling',
+                        default=5,
+                        help='Minimum number of chromosomes gained to define WGD')
+    single_patient_timing.add_argument('-hrd', '--call_hrd',
+                        action='store_true',
+                        dest='call_hrd',
+                        help='(development) allow grouping of chromosome trisomies as a replacement to WGD')
     single_patient_timing.set_defaults(func=SinglePatientTiming.SinglePatientTiming.run_tool)
 
     leaguemodel = subparsers.add_parser("LeagueModel", help="Time somatic events across a cohort.",

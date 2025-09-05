@@ -11,7 +11,7 @@ def run_tool(args):
 
     patient_data = Patient(artifact_blacklist=args.artifact_blacklist,
                            indiv_name=args.indiv_id, artifact_whitelist=args.artifact_whitelist,
-                           driver_genes_file=args.driver_genes_file, ref_build=args.ref_build)
+                           driver_genes_file=args.driver_genes_file)
 
     if args.sif:  # if sif file is specified
         with open(args.sif, 'r') as sif_file:
@@ -47,7 +47,14 @@ def run_tool(args):
     patient_data.preprocess_samples()
     if args.min_supporting_muts < 1:
         raise ValueError('Invalid value for min_supporting_muts')
-    timing_engine = TimingEngine.TimingEngine(patient_data, min_supporting_muts=args.min_supporting_muts)
+    if args.min_chr_doubling < 1:
+        raise ValueError('Invalid value for min_chr_doubling, should be at least 1')
+    if not type(args.call_hrd) is bool:
+        raise ValueError('Invalid value for call_hyperdiploidy. Expecting a boolean.')
+    timing_engine = TimingEngine.TimingEngine(patient_data,
+                                              min_supporting_muts=args.min_supporting_muts,
+                                              min_chr_doubling=args.min_chr_doubling,
+                                              call_hyperdiploidy=args.call_hrd)
     timing_engine.time_events()
     phylogicoutput = PhylogicOutput()
     phylogicoutput.write_timing_tsv(timing_engine)

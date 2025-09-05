@@ -97,7 +97,7 @@ class BuildTreeEngine:
 
         # return {cluster_id: cluster.hist for cluster_id, cluster in self._patient.ClusteringResults.items()}
 
-    def build_tree(self, n_iter=250, burn_in=100, disable_mut_shuffle=False):
+    def build_tree(self, n_iter=250, burn_in=100):
         """ Main function to construct phylogenetic tree """
         tree = Tree()
         # Create initial tree, where each cluster is a child of the clonal cluster
@@ -127,8 +127,7 @@ class BuildTreeEngine:
                 # update Nodes pointers to parents and children
                 tree.set_new_edges(tree_edges_selected)
                 # Shuffle mutations
-                if not disable_mut_shuffle:
-                    shuffling(self._patient.ClusteringResults, self._patient.sample_list)
+                shuffling(self._patient.ClusteringResults, self._patient.sample_list)
             top_tree_edges, cluster_densities = self._most_common_tree()
             for cluster_id, cluster in self._patient.ClusteringResults.items():
                 cluster.set_hist(cluster_densities[cluster_id])
