@@ -16,16 +16,21 @@ CENT_LOOKUP = {str(c): v for c, v in CENT_LOOKUP.items()}
 CENT_LOOKUP['X'] = CENT_LOOKUP['23']
 
 
+
 class TimingEngine(object):
     """
     Class for holding samples
     """
+
     def __init__(self, patient, cn_state_whitelist=_cn_state_whitelist, chromosomes=_chromosomes,
-                 arms=_arms, min_supporting_muts=3):
+                 arms=_arms, min_supporting_muts=3, min_chr_doubling=5, call_hyperdiploidy=False):
         self.patient = patient
         self.cn_state_whitelist = cn_state_whitelist
         self.arm_regions = list(itertools.product(chromosomes, arms))
         self.min_supporting_muts = min_supporting_muts
+        self.min_chr_doubling = min_chr_doubling
+        self.call_hyperdiploidy = call_hyperdiploidy
+        self.ref_build = self.patient.ref_build  # ref_build is already sent by patient class
         self.sample_list = []
         for sample in self.patient.sample_list:
             timing_sample = TimingSample(sample, self)
@@ -34,7 +39,8 @@ class TimingEngine(object):
         self.timeable_muts = {}
         self.all_cn_events = {}
         self.get_concordant_cn_states()
-        self.WGD = None
+        self.WGD = None # Definition of WGD varies in Sample engine (to include HRD for instance)
+        self.regions_to_inspect = self.arm_regions_to_wgs_hrd_set()
         self.call_wgd()
         self.mutations = {}
         self.get_mutations()
@@ -74,7 +80,8 @@ class TimingEngine(object):
                     # get all supporting muts from all samples
                     supporting_mut_varstr = {mut.var_str for mut in states_across_samples[state][0].supporting_muts}
                     for sample_state in states_across_samples[state]:
-                        supporting_mut_varstr = supporting_mut_varstr & {mut.var_str for mut in sample_state.supporting_muts}
+                        supporting_mut_varstr = supporting_mut_varstr & {mut.var_str for mut in
+                                                                         sample_state.supporting_muts}
                     supporting_muts = []
                     for mut_varstr in supporting_mut_varstr:
                         mut = self.sample_list[0][mut_varstr]
@@ -98,33 +105,46 @@ class TimingEngine(object):
                                                       supporting_muts=supporting_muts)
                     self.concordant_cn_states[chrN + arm] = multisample_state
 
-    def call_wgd(self, concordance_threshold=.8, tol=.2):  # TODO: try other concordance thresholds
+    def arm_regions_to_wgs_hrd_set(self, hrd_chr=None):
+        if self.call_hyperdiploidy and hrd_chr is None:
+            hrd_chr = ['3', '5', '7', '9', '11', '15', '19', '21']
+        if self.call_hyperdiploidy:
+            return list([ i for i in self.arm_regions if i[0] in hrd_chr])
+        else:
+            return self.arm_regions
+
+    def call_wgd(self, concordance_threshold=.8, tol=.2, CNGroup="WGD"):  # TODO: try other concordance thresholds
+        # TODO separate wgd and hrd
         """
         call WGD event for a patient across all samples
+        CNGroup parameter to create other variables (dev)
         """
         min_pi = np.ones(101)
         for sample in self.sample_list:  # call WGD event in samples first
             sample.fill_mutation_intervaltree(concordant_muts=self.timeable_muts)
             sample.call_arm_level_cn_states(concordant_states=self.concordant_cn_states)
-            sample.call_wgd(use_concordant_states=True)
+            sample.call_wgd(use_concordant_states=True) if not self.call_hyperdiploidy else sample.call_concordant_hrd()
             sample.get_arm_level_cn_events(use_concordant_states=True)
             if sample.concordant_WGD is not None:
                 sample.concordant_WGD.get_pi_dist()
-                min_pi = np.minimum(min_pi, sample.concordant_WGD.pi_dist)  # only call WGD in patient if sample-level WGD events have similar pi distributions
-        if not all([sample.concordant_WGD is not None for sample in self.sample_list]) or sum(min_pi) < concordance_threshold:
+                min_pi = np.minimum(min_pi,
+                                    sample.concordant_WGD.pi_dist)  # only call WGD in patient if sample-level WGD events have similar pi distributions
+        if not all([sample.concordant_WGD is not None for sample in self.sample_list]) or sum(
+                min_pi) < concordance_threshold:
             return  # if not samples have WGD event or concordance is below threshold do not call WGD
         regions_supporting_WGD = []
-        for chrN, arm in self.arm_regions:
+        for chrN, arm in self.regions_to_inspect:
             region = str(chrN) + arm
             if region in self.concordant_cn_states:
                 cn_state = self.concordant_cn_states[region]
                 if all(sample.cn_states[region].cn_a2 >= 2 for sample in self.sample_list):
                     # make new TimingCNState instances for WGD since patient level states will be called relative to WGD
                     regions_supporting_WGD.append(TimingCNState([self], cn_state.chrN, cn_state.arm,
-                        (cn_state.cn_a1, cn_state.cn_a2), cn_state.purity, supporting_muts=cn_state.supporting_muts))
+                                                                (cn_state.cn_a1, cn_state.cn_a2), cn_state.purity,
+                                                                supporting_muts=cn_state.supporting_muts))
         self.WGD = TimingWGD(supporting_arm_states=regions_supporting_WGD)
         for cn_state in self.concordant_cn_states.values():
-            cn_state.call_events(wgd=True)  # call copy number events relative to WGD
+            cn_state.call_events(wgd=False if self.call_hyperdiploidy else True)  # call copy number events relative to WGD
 
     def get_mutations(self):
         for mut_varstr in self.sample_list[0].mut_lookup_table:
@@ -153,8 +173,10 @@ class TimingEngine(object):
         """
         attach truncal copy number events to engine
         """
-        self.truncal_cn_events = {gl + chrN + arm: [] for gl, (chrN, arm) in itertools.product(('gain_', 'loss_'), self.arm_regions)}
-        self.all_cn_events = {gl + chrN + arm: [] for gl, (chrN, arm) in itertools.product(('gain_', 'loss_'), self.arm_regions)}
+        self.truncal_cn_events = {gl + chrN + arm: [] for gl, (chrN, arm) in
+                                  itertools.product(('gain_', 'loss_'), self.arm_regions)}
+        self.all_cn_events = {gl + chrN + arm: [] for gl, (chrN, arm) in
+                              itertools.product(('gain_', 'loss_'), self.arm_regions)}
         cluster_ccfs = self._get_cluster_ccfs()
         sample_idx = range(len(self.sample_list))
         for cn_state in self.concordant_cn_states:
@@ -195,17 +217,23 @@ class TimingEngine(object):
         subclonal_dist[100] = 1.
         if self.WGD is not None:
             self.WGD.get_pi_dist()
+
+        if self.WGD is not None and not self.call_hyperdiploidy:
             for mut in self.mutations.values():
                 if mut.is_clonal:
                     mut.get_pi_dist(self.WGD)
             for cn_event_name in self.all_cn_events:
+                # a more elegant solution would be to bring baseline CN
+                # and set of WGD candidates here
+                # separate WGD should maybe not be necessary
                 for cn_event in self.all_cn_events[cn_event_name]:
                     if not cn_event.is_clonal:
                         cn_event.pi_dist = subclonal_dist
+#                    if self.call_hyperdiploidy: actually don't need >3 copies, and
                     elif cn_event.Type.endswith('gain'):
-                        cn_event.get_pi_dist_for_higher_gain(self.WGD)
+                            cn_event.get_pi_dist_for_higher_gain(self.WGD)
                     elif cn_event.Type.endswith('loss'):
-                        cn_event.get_pi_dist_for_loss(self.WGD)
+                            cn_event.get_pi_dist_for_loss(self.WGD)
         else:
             for cn_event_name in self.all_cn_events:
                 for cn_event in self.all_cn_events[cn_event_name]:
@@ -231,10 +259,12 @@ class TimingSample(object):
     """
     class for holding a sample
     """
-    def __init__(self, sample, engine, cn_state_whitelist=_cn_state_whitelist, chromosomes=_chromosomes, arms=_arms):
+    def __init__(self, sample, engine, cn_state_whitelist=_cn_state_whitelist,
+                 chromosomes=_chromosomes, arms=_arms):
         self.sample = sample
         self.sample_name = self.sample.sample_name
         self.engine = engine
+        self.ref_build = self.engine.ref_build  # inherit from engine instead
         self.cn_state_whitelist = cn_state_whitelist
         self.purity = self.sample.purity
         self.CnProfile = self.sample.CnProfile
@@ -252,9 +282,18 @@ class TimingSample(object):
         self.missing_arms = None
         self.concordant_cn_states = None
         self.call_arm_level_cn_states()
-        self.cn_events = {gl + chrN + arm: [] for gl, (chrN, arm) in itertools.product(('gain_', 'loss_'), self.arm_regions)}
-        self.concordant_cn_events = {gl + chrN + arm: [] for gl, (chrN, arm) in itertools.product(('gain_', 'loss_'), self.arm_regions)}
-        self.call_wgd()
+        self.cn_events = {gl + chrN + arm: [] for gl, (chrN, arm) in
+                          itertools.product(('gain_', 'loss_'), self.arm_regions)}
+        self.concordant_cn_events = {gl + chrN + arm: [] for gl, (chrN, arm) in
+                                     itertools.product(('gain_', 'loss_'), self.arm_regions)}
+
+        self.supporting_arm_states_HRD = []
+        self.regions_supporting_HRD = []
+        self.n_hrd_chr = 0
+        if self.engine.call_hyperdiploidy:
+            self.call_hrd()
+        else:
+            self.call_wgd()
         self.get_arm_level_cn_events()
 
     def __repr__(self):
@@ -344,11 +383,86 @@ class TimingSample(object):
                                              supporting_muts=supporting_muts)
                     self.cn_states[chrN + arm] = cn_state
                 elif chrN + arm in concordant_states:
-                    supporting_muts = [interval.data for interval in self.concordant_mutation_intervaltree[chrN][start:end]
-                                      if interval.data.local_cn_a1 == cn_a1 and interval.data.local_cn_a2 == cn_a2]
+                    supporting_muts = [interval.data for interval in
+                                       self.concordant_mutation_intervaltree[chrN][start:end]
+                                       if interval.data.local_cn_a1 == cn_a1 and interval.data.local_cn_a2 == cn_a2]
                     cn_state = TimingCNState([self], chrN, arm, (cn_a1, cn_a2), [self.purity],
                                              supporting_muts=supporting_muts)
                     self.concordant_cn_states[chrN + arm] = cn_state
+
+    def count_hrd_chr(self):
+        if self.regions_supporting_HRD:
+            self.n_hrd_chr = len(list(set([a.chrN for a in self.regions_supporting_HRD])))
+
+    def extract_arms_supporting_hrd(self, hrd_chrs=None):
+        # isolate chr arm (because cn_states works at the chr arm level)
+        # TODO investigate more stringency on the clonality
+        if hrd_chrs is None:
+            hrd_chrs = ['3', '5', '7', '9', '11', '15', '19', '21']
+        for cn_state in self.cn_states.values():
+            if cn_state.cn_a2 >= 2 and cn_state.chrN in hrd_chrs:
+                self.supporting_arm_states_HRD.append(cn_state)
+
+    def group_arms_of_non_acrocentric_chromosomes(self, non_acrocentric_hrd_chrs=None, acrocentric_hrd_chrs=None):
+        # conversely both arms should be gained for large chr
+        # (we exclude chr3p a2 1, chr3q a2 2 for instance)
+        if non_acrocentric_hrd_chrs is None:
+            non_acrocentric_hrd_chrs = ['3', '5', '7', '9', '11', '19']
+        if acrocentric_hrd_chrs is None:
+            acrocentric_hrd_chrs = ['15', '21']
+        for cn_state in self.supporting_arm_states_HRD:
+            arms = sorted([a.arm for a in self.supporting_arm_states_HRD if a.chrN == cn_state.chrN])
+            if cn_state.chrN in non_acrocentric_hrd_chrs:
+                if arms == ['p', 'q']:
+                    self.regions_supporting_HRD.append(cn_state)
+            elif cn_state.chrN in acrocentric_hrd_chrs:
+                if arms == ['q']:
+                    self.regions_supporting_HRD.append(cn_state)
+
+    def call_concordant_hrd(self, hrd_chrs=None):
+        # TODO refactor code
+        supporting_arm_states=[]
+        if hrd_chrs is None:
+            hrd_chrs = ['3', '5', '7', '9', '11', '15', '19', '21']
+        if self.WGD is None:
+            return
+        for cn_state in self.concordant_cn_states.values():
+            if cn_state.cn_a2 >= 2 and cn_state.chrN in hrd_chrs:
+                supporting_arm_states.append(TimingCNState([self], cn_state.chrN, cn_state.arm,
+                                                           (cn_state.cn_a1, cn_state.cn_a2), cn_state.purity,
+                                                           supporting_muts=cn_state.supporting_muts))
+        self.concordant_WGD = TimingWGD(supporting_arm_states=supporting_arm_states)
+        for cn_state in self.concordant_cn_states.values():
+            cn_state.call_events(wgd=False)
+
+    def call_hrd(self, acrocentric_hrd_chrs=None,
+                 non_acrocentric_hrd_chrs=None,
+                 min_hrd_chr=2):
+        """
+        (dev) group trisomies at 0/2, 1/2, 2/2
+        """
+        if non_acrocentric_hrd_chrs is None:
+            non_acrocentric_hrd_chrs = ['3', '5', '7', '9', '11', '19']
+        if acrocentric_hrd_chrs is None:
+            acrocentric_hrd_chrs = ['15', '21']
+        hrd_chrs = acrocentric_hrd_chrs + non_acrocentric_hrd_chrs
+
+        # this to allow grouping of more HRD arms even if whole chr is not duplicated (assessed in next function)
+        self.extract_arms_supporting_hrd(hrd_chrs=hrd_chrs)
+
+        self.group_arms_of_non_acrocentric_chromosomes(non_acrocentric_hrd_chrs=non_acrocentric_hrd_chrs,
+                                                       acrocentric_hrd_chrs=acrocentric_hrd_chrs)
+        self.count_hrd_chr()
+
+        if self.n_hrd_chr >= min_hrd_chr:
+            self.supporting_arm_states_HRD = [
+                TimingCNState([self],
+                              s.chrN, s.arm, (s.cn_a1, s.cn_a2),
+                              s.purity, supporting_muts=s.supporting_muts)
+                for s in self.supporting_arm_states_HRD]
+            self.WGD = TimingWGD(supporting_arm_states=self.supporting_arm_states_HRD)
+            for cn_state in self.cn_states.values():
+                cn_state.call_events(wgd=False) # baseline 1 for non-trisomic chromosomes under HRD hypothesis
 
     def call_wgd(self, use_concordant_states=False):
         """
@@ -356,15 +470,16 @@ class TimingSample(object):
         """
         # TODO: filter outlier pi distributions
         regions_supporting_WGD = []
-        regions_both_arms_gained = []
+        regions_both_alleles_gained = []
         supporting_arm_states = []
         if use_concordant_states:
             if self.WGD is None:
                 return
             for cn_state in self.concordant_cn_states.values():
-                if cn_state.cn_a1 == 0 or cn_state.cn_a1 >= 2 and cn_state.cn_a2 >= 2:  # region supports WGD if 0/2 or 2/2
+                if (cn_state.cn_a1 == 0 or cn_state.cn_a1 >= 2 ) and cn_state.cn_a2 >= 2:  # region supports WGD if 0/2 or 2/2
                     supporting_arm_states.append(TimingCNState([self], cn_state.chrN, cn_state.arm,
-                        (cn_state.cn_a1, cn_state.cn_a2), cn_state.purity, supporting_muts=cn_state.supporting_muts))
+                                                               (cn_state.cn_a1, cn_state.cn_a2), cn_state.purity,
+                                                               supporting_muts=cn_state.supporting_muts))
             self.concordant_WGD = TimingWGD(supporting_arm_states=supporting_arm_states)
             for cn_state in self.concordant_cn_states.values():
                 cn_state.call_events(wgd=True)
@@ -372,13 +487,14 @@ class TimingSample(object):
             for cn_state in self.cn_states.values():
                 if cn_state.cn_a2 >= 2:
                     supporting_arm_states.append(cn_state)
-                if (cn_state.cn_a1 == 0 or cn_state.cn_a1 >= 2) and cn_state.cn_a2 >= 2:  # region supports WGD if 0/2 or 2/2
+                if ( cn_state.cn_a1 == 0 or cn_state.cn_a1 >= 2) and cn_state.cn_a2 >= 2:  # region supports WGD if 0/2 or 2/2
                     regions_supporting_WGD.append(cn_state)
                 if cn_state.cn_a1 >= 2 and cn_state.cn_a2 >= 2:
-                    regions_both_arms_gained.append(cn_state)
-            if len(regions_both_arms_gained) >= 5 and len(regions_supporting_WGD) * 2 >= \
+                    regions_both_alleles_gained.append(cn_state)
+            if len(regions_both_alleles_gained) >= self.engine.min_chr_doubling or len(regions_supporting_WGD) * 2 >= \
                     len(self.arm_regions) - len(self.missing_arms):
-                supporting_arm_states = [TimingCNState([self], s.chrN, s.arm, (s.cn_a1, s.cn_a2), s.purity, supporting_muts=s.supporting_muts) for
+                supporting_arm_states = [TimingCNState([self], s.chrN, s.arm, (s.cn_a1, s.cn_a2), s.purity,
+                                                       supporting_muts=s.supporting_muts) for
                                          s in supporting_arm_states]
                 self.WGD = TimingWGD(supporting_arm_states=supporting_arm_states)
                 for cn_state in self.cn_states.values():
@@ -389,9 +505,11 @@ class TimingSample(object):
         extract cn events from cn state instances
         """
         if use_concordant_states:
-            self.concordant_cn_events = {gl + chrN + arm: [] for gl, (chrN, arm) in itertools.product(('gain_', 'loss_'), self.arm_regions)}
+            self.concordant_cn_events = {gl + chrN + arm: [] for gl, (chrN, arm) in
+                                         itertools.product(('gain_', 'loss_'), self.arm_regions)}
         else:
-            self.cn_events = {gl + chrN + arm: [] for gl, (chrN, arm) in itertools.product(('gain_', 'loss_'), self.arm_regions)}
+            self.cn_events = {gl + chrN + arm: [] for gl, (chrN, arm) in
+                              itertools.product(('gain_', 'loss_'), self.arm_regions)}
         for state in self.cn_states.values():
             for eve in state.cn_events:
                 if use_concordant_states:
@@ -561,14 +679,14 @@ class TimingCNEvent(object):
         # p2_interp = scipy.interpolate.PchipInterpolator(np.linspace(0, 1, 101), p2_real)
         # pi_domain = np.linspace(0, 1, 101)
         # change of variables
-        #TODO: make this more readable
+        # TODO: make this more readable
         if self.cn_a1 == 0. or self.cn_a1 == 2.:
             p2_domain_in_pi_space = 2 * np.linspace(0, 1, 101) / (np.linspace(0, 1, 101) + 1)
             pi_dist = np.zeros(101)
             for p2, p2_diff, prob in zip(p2_domain_in_pi_space, np.diff(p2_domain_in_pi_space), p2_real):
                 min_ = p2 * 100.
                 max_ = (p2 + p2_diff) * 100.
-                bins = np.arange(np.floor(min_), np.floor(max_ + 1 if max_.is_integer() else max_ + 2)) # affected bins
+                bins = np.arange(np.floor(min_), np.floor(max_ + 1 if max_.is_integer() else max_ + 2))  # affected bins
                 proportions = np.diff(np.clip(bins, min_, max_)) / (p2_diff * 100.)
                 pi_dist[bins[:-1].astype(int)] += proportions * prob
             # pi_domain_in_p2_space = pi_domain / (2 - pi_domain)
@@ -688,6 +806,7 @@ class TimingMut(object):
     """
     Class for storing information on snps and indels and for getting multiplicity likelihood distributions
     """
+
     def __init__(self, sample_list, gene, chrN, pos, alt, ref, alt_cnt, ref_cnt, local_cn_a1, local_cn_a2, ccf_dist,
                  prot_change=None, pi_dist=None, is_clonal=None, clonal_cutoff=.86, cluster_assignment=None):
         self.sample_list = sample_list
@@ -706,7 +825,8 @@ class TimingMut(object):
         ccf_hat = sum(bins * self.ccf_dist)
         if is_clonal is None:
             if self.cluster_assignment is None:
-                self.is_clonal = all(ccf_hat > clonal_cutoff) if isinstance(ccf_hat, np.ndarray) else ccf_hat > clonal_cutoff
+                self.is_clonal = all(ccf_hat > clonal_cutoff) if isinstance(ccf_hat,
+                                                                            np.ndarray) else ccf_hat > clonal_cutoff
             else:
                 self.is_clonal = self.cluster_assignment == 1
         else:
@@ -778,7 +898,7 @@ class TimingMut(object):
             max_cn = int(cn_a2)
             lik_before_gain = sum(self.mult_lik_dict[i] * i / max_cn for i in range(2, max_cn + 1))
             lik_after_gain = sum(self.mult_lik_dict[i] * (max_cn - i) / max_cn for i in range(2, max_cn)) \
-                + self.mult_lik_dict[1]
+                             + self.mult_lik_dict[1]
         elif cn_a1 == 1. and cn_a2 >= 2.:
             max_cn = int(cn_a2)
             lik_before_gain = sum(self.mult_lik_dict[i] * i / max_cn for i in range(1, max_cn + 1))

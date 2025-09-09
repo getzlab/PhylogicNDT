@@ -91,7 +91,7 @@ class TumorSample:
                                                use_indels=use_indels,
                                                _additional_muts=_additional_muts)  # a list of SomMutation objects
 
-        self.CnProfile = self._resolve_CnEvents(seg_file, input_type=seg_input_type)
+        self.CnProfile = self._resolve_CnEvents(seg_file, input_type=seg_input_type, purity=purity)
 
         self.ClustersPostMarginal = None  # format F[Cluster] = CCF post hist
 
@@ -356,8 +356,9 @@ class TumorSample:
         dupl_removed = list(collections.OrderedDict.fromkeys(mutation_list))
         if len(dupl_removed) != len(mutation_list):
             sample_name = self.sample_name if self.sample_name is not None else ''
-            logging.warning("Duplicate mutations found in sample", sample_name + ":")
-            logging.warning("Removed", len(mutation_list) - len(dupl_removed), "mutations.")
+            logging.warning("Duplicate mutations found in sample %s :", sample_name)
+            n_removed = len(mutation_list) - len(dupl_removed)
+            logging.warning("Removed %s mutations.", n_removed)
             mutation_list = dupl_removed
         return mutation_list
 
@@ -515,11 +516,11 @@ class TumorSample:
                         else:
                             local_cn_a2 = 2
                             ccf_hat_a2 = major_cn_change / (local_cn_a2 - 1)
-                            while ccf_hat_a2 > .5 / local_cn_a2 + 1:
+                            while ccf_hat_a2 > .5 / local_cn_a2 + 1: # (JB) the observed effect is CN small over estimate of CN gain keeps within 2 copies instead of 2+small ccf for a 3rd one with ABSOLUTE stringent clustering. I reviewed a case where I am more happy with Phylogic than ABSOLUTE. TODO find more.
                                 local_cn_a2 += 1
                                 ccf_hat_a2 = major_cn_change / (local_cn_a2 - 1)
-                            ccf_high_a2 = ((mu_major + sigma_major) * ploidy / 2 - 1) / local_cn_a2 / purity
-                            ccf_low_a2 = ((mu_major - sigma_major) * ploidy / 2 - 1) / local_cn_a2 / purity
+                            ccf_high_a2 = ((mu_major + sigma_major) * ploidy / 2 - 1) / (local_cn_a2 - 1) / purity
+                            ccf_low_a2 = ((mu_major - sigma_major) * ploidy / 2 - 1) / (local_cn_a2 - 1) / purity
                         seg_tree[chrN].add(Interval(start, end,
                                                     (self.sample_name, {'cn_a1': local_cn_a1, 'cn_a2': local_cn_a2,
                                                                         'ccf_hat_a1': ccf_hat_a1,

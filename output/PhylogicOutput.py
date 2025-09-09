@@ -212,6 +212,7 @@ class PhylogicOutput(object):
                 alt = fields['Tumor_Seq_Allele']
                 ref_cnt = fields['t_ref_count']
                 alt_cnt = fields['t_alt_count']
+                var_class = fields['Variant_Classification']
                 c = int(fields['Cluster_Assignment'])
                 ccf_hat = float(fields['preDP_ccf_mean'])
                 if fields['Variant_Type'] == 'CNV':
@@ -499,6 +500,8 @@ class PhylogicOutput(object):
                 if node in pie_slices:
                     x.append(pie_slices[node])
                     colors.append(ClusterColors.get_hex_string(node.identifier))
+            #increases width of outer rings
+            #ax.pie(x, colors=colors, radius=.9-(.22*level))
             ax.pie(x, colors=colors, radius=.9-(.1*level))
         ax.set_axis_off()
         plt.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
@@ -1011,7 +1014,7 @@ class PhylogicOutput(object):
 
     """
     @staticmethod
-    def write_tree_tsv(trees_counts, trees_ll, indiv_id):        
+    def write_tree_tsv(trees_counts, trees_ll, indiv_id):
         # add header
         header = ['n_iter', 'log_lik', 'edges']
         with open(indiv_id + '_build_tree_posteriors.tsv', 'w') as writer:
@@ -1075,7 +1078,7 @@ class PhylogicOutput(object):
             writer.write('\t'.join(header) + '\n')
             for sample_id, cluster_densitites in mcmc_trace_constrained_densitites.items():
                 for cluster_id, densities in cluster_densitites.items():
-                    for iteration, constrained_density in enumerate(densities):                        
+                    for iteration, constrained_density in enumerate(densities):
                         line = [indiv_id, str(sample_id), str(iteration), str(cluster_id)] + [str(x) for x in constrained_density]
                         writer.write('\t'.join(line) + '\n')
 
@@ -1117,19 +1120,19 @@ class PhylogicOutput(object):
         with open(indiv_id + '_growth_rate.tsv', 'w') as writer:
             writer.write('\t'.join(header) + '\n')
             for cluster_id, cluster_growth_rates in growth_rates.items():
-                for iteration, rate in enumerate(cluster_growth_rates):                    
+                for iteration, rate in enumerate(cluster_growth_rates):
                     line = [indiv_id, str(cluster_id), str(iteration), str(rate)]
                     writer.write('\t'.join(line) + '\n')
 
-    
-    def plot_growth_rates(self, growth_rates, indiv):    
+
+    def plot_growth_rates(self, growth_rates, indiv):
         import seaborn as sns
         for clust, rate in growth_rates.items():
-            if sum(rate) == 0: 
+            if sum(rate) == 0:
                 continue
             sns.distplot(np.array(rate), bins=35,
                             label=str(clust) + " - %1.2f" % (sum(np.array(rate) < 0) / float(len(rate))),
-                            color=ClusterColors.get_hex_string(clust))            
+                            color=ClusterColors.get_hex_string(clust))
         plt.title("Clusters growth rate")
         plt.xlabel("growth rate")
         plt.ylabel("Probability Density")

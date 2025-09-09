@@ -45,7 +45,7 @@ class SomMutation:
         self.from_sample = from_sample
 
         # Basic properties of mutation
-        self.chrN = chrN
+        self.chrN = chrN.lstrip('chr')
         self.pos = int(float(pos))
         self.ref = ref
         self.alt = alt
