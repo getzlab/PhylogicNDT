@@ -548,6 +548,7 @@ class Patient:
                     seg_data = seg.data[i][1]
                     cns_a1.append(seg_data['cn_a1'])
                     cns_a2.append(seg_data['cn_a2'])
+                    # TODO questionable choice. Why is it this way? It seems to rely on the modal.a1 and modal.a2 values from ABSOLUTE
                     ccf_hat_a1.append(seg_data['ccf_hat_a1'] if seg_data['cn_a1'] != 1 else 0.)
                     ccf_hat_a2.append(seg_data['ccf_hat_a2'] if seg_data['cn_a2'] != 1 else 0.)
                     ccf_high_a1.append(seg_data['ccf_high_a1'] if seg_data['cn_a1'] != 1 else 0.)
