@@ -703,7 +703,35 @@ def lstirling(n, m):
     else:
         return None
 
+def get_log_stirling_coefs(W):
+    ## if W = c(1:N), then this function returns the (unisgned 1st kind of) Stirling numbers for
+    ## N, k=c(1:N)
+    ## starts to give incorrect results at N = 19 if fft is used
+    ## x and y logged
+    def log_conv(x, y):
+        ## y is len 2
+        try:
+            x = [-np.inf] + list(x) + [-np.inf]
 
+        except:
+
+            x = [-np.inf, x, -np.inf]
+        x.insert(0, -np.inf)
+
+        res = [np.nan] * (len(x) - 1)
+        for k in range(len(x) - 1):
+            res[k] = logsumexp_scipy([x[k] + y[0], x[k + 1] + y[1]])  #
+
+        return (res)
+
+    N = len(W)
+    nW = W
+
+    cres = np.log(1)
+    for i in range(N - 1):
+        cres = log_conv(cres, np.log([nW[i], 1]))
+
+    return list(reversed(cres))
 
 def DP_prob_k_cond_alpha_N(N, alpha, log_stirling_coef):
     loglik = [np.nan] * N
@@ -740,7 +768,14 @@ def init_dp_prior(N, Pi_k):
 
     logging.info("Initializing prior over DP k for " + str(N) + " items")
 
-    log_stirling_coef = [lstirling(N,x) for x in range(1,N+1)]
+    try:
+        log_stirling_coef = [lstirling(N,x) for x in range(1,N+1)]
+    except ValueError as e:
+        # Fallback: use analytic approximation
+        # import logging
+        # logger = logging.getLogger(__name__)
+        logging.warning("lstirling failed for N=%s: %s. Falling back to get_log_stirling_coefs.", N, str(e))
+        log_stirling_coef = get_log_stirling_coefs(range(1, N + 1))
 
     GMAX = 5
     grid = np.linspace(1e-25, GMAX, 1000)
