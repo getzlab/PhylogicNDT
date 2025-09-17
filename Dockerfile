@@ -1,4 +1,9 @@
-from bitnami/minideb:buster
+FROM bitnami/minideb:buster
+# Point to Debian archive repos since buster is EOL
+RUN sed -i 's|deb.debian.org/debian|archive.debian.org/debian|g' /etc/apt/sources.list && \
+    sed -i 's|security.debian.org/debian-security|archive.debian.org/debian-security|g' /etc/apt/sources.list && \
+    echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid && \
+    apt-get update
 RUN install_packages python-pip build-essential python-dev r-base r-base-dev git graphviz python-tk
 RUN pip install setuptools wheel
 RUN pip install numpy scipy matplotlib pandas
