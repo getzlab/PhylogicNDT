@@ -48,6 +48,7 @@ class Patient:
                  artifact_blacklist=os.path.join(os.path.dirname(__file__), 'supplement_data/Blacklist_SNVs.txt'),
                  artifact_whitelist='',
                  use_indels=False,
+                 coding_only=False,
                  min_coverage=8,
                  PoN_file=False):
 
@@ -72,6 +73,7 @@ class Patient:
         # min cov is specified both here and passed to tumor sample.
         self.min_coverage = min_coverage
         self.use_indels = use_indels
+        self.coding_only = coding_only
         self.PoN_file = PoN_file
 
         self._validate_sample_names()
@@ -143,7 +145,8 @@ class Patient:
                                  artifact_blacklist=self.PatientLevel_MutBlacklist,
                                  artifact_whitelist=self.PatientLevel_MutWhitelist,
                                  ccf_grid_size=grid_size, PoN=self.PoN_file, indiv=self.indiv_name,
-                                 use_indels=self.use_indels, min_coverage=self.min_coverage,
+                                 use_indels=self.use_indels, coding_only=self.coding_only,
+                                 min_coverage=self.min_coverage,
                                  _additional_muts=_additional_muts, seg_file=seg_file,
                                  purity=purity, timepoint_value=timepoint_value)
 

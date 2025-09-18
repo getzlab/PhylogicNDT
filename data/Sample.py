@@ -54,6 +54,7 @@ class TumorSample:
                  artifact_whitelist='',
                  PoN=None,
                  use_indels=False,
+                 coding_only=False,
                  min_coverage=None,
                  delete_auto_bl=False,
                  _additional_muts=None,
@@ -89,6 +90,7 @@ class TumorSample:
         self.mutations = self._load_sample_ccf(file_name, input_type,
                                                min_coverage=min_coverage,
                                                use_indels=use_indels,
+                                               coding_only=coding_only,
                                                _additional_muts=_additional_muts)  # a list of SomMutation objects
 
         self.CnProfile = self._resolve_CnEvents(seg_file, input_type=seg_input_type, purity=purity)
@@ -116,7 +118,7 @@ class TumorSample:
     def get_mut_by_varstr(self, variant_string):
         return self._mut_varstring_hashtable[variant_string]
 
-    def _load_sample_ccf(self, filen, input_type='auto', min_coverage=8, use_indels=False, _additional_muts=None):
+    def _load_sample_ccf(self, filen, input_type='auto', min_coverage=8, use_indels=False, coding_only=False, _additional_muts=None):
         """ Accepted input types abs; txt; sqlite3 .db;
             auto tab if .txt, .tsv or .tab ; abs if .Rdata; sqlite if .db """
 
@@ -174,6 +176,11 @@ class TumorSample:
             if mut.alt_cnt is not None and mut.alt_cnt + mut.ref_cnt < min_coverage:
                 mut.graylist_status = True
             if (mut.type in ["INS", "DEL"]) and not use_indels:
+                mut.graylist_status = True
+
+            if (mut.mut_category in ["IGR", "Intron", "RNA",
+                                     "5'Flank", "3'UTR", "Silent",
+                                     "5'UTR"]) and coding_only:
                 mut.graylist_status = True
 
             if mut.type == "CNV":

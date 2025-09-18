@@ -26,7 +26,7 @@ def run_tool(args):
     patient_data = Patient.Patient(artifact_blacklist=args.artifact_blacklist,
                                    PoN_file=PoN, indiv_name=args.indiv_id, artifact_whitelist=args.artifact_whitelist,
                                    min_coverage=args.min_cov, use_indels=args.use_indels,
-                                   impute_missing=args.impute_missing,
+                                   impute_missing=args.impute_missing, coding_only=args.coding_only,
                                    driver_genes_file=args.driver_genes_file)
 
     # delete_auto_bl=args.Delete_Blacklist,

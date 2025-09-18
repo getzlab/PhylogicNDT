@@ -237,6 +237,12 @@ def build_parser():
                             dest='maf_input_type',
                             default='auto')
 
+    clustering.add_argument('--coding_only', '-co',
+                            action="store_true",
+                            dest='coding_only',
+                            help='cluster using only coding mutations'
+                            )
+
     # BuildTree  Tool
 
     buildtree = subparsers.add_parser("BuildTree", help="BuildTree module for constructing of phylogenetic trees.",
