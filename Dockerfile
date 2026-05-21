@@ -1,18 +1,37 @@
-FROM bitnami/minideb:buster
-# Point to Debian archive repos since buster is EOL
-RUN sed -i 's|deb.debian.org/debian|archive.debian.org/debian|g' /etc/apt/sources.list && \
-    sed -i 's|security.debian.org/debian-security|archive.debian.org/debian-security|g' /etc/apt/sources.list && \
-    echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid && \
-    apt-get update
-RUN install_packages python-pip build-essential python-dev r-base r-base-dev git graphviz python-tk
-RUN pip install setuptools wheel
-RUN pip install numpy scipy matplotlib pandas
+FROM --platform=linux/amd64 python:2.7-stretch
+
+# normal debian mirrors no longer host packages
+RUN sed -i 's|deb.debian.org|archive.debian.org|g' /etc/apt/sources.list && \
+    sed -i 's|security.debian.org|archive.debian.org|g' /etc/apt/sources.list && \
+    sed -i '/stretch-updates/d' /etc/apt/sources.list && \
+    echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99no-check-valid
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    python-dev \
+    r-base \
+    r-base-dev \
+    git \
+    graphviz \
+    libgraphviz-dev \
+    pkg-config \
+    python-tk && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN pip install --upgrade \
+    "pip<21" \
+    "setuptools<45" \
+    "wheel<0.35"
+
+RUN pip install \
+    "numpy<1.17" \
+    "scipy<1.3" \
+    "matplotlib<3" \
+    "pandas<0.25"
+
 COPY req /tmp/req
-RUN apt-get -y upgrade
-RUN apt-get -y update
-RUN apt-get install -y libgraphviz-dev
 RUN pip install -r /tmp/req
-RUN pip install -e git+https://github.com/rmcgibbo/logsumexp.git#egg=sselogsumexp
+RUN pip install git+https://github.com/rmcgibbo/logsumexp.git#egg=sselogsumexp
 RUN mkdir /phylogicndt/
 COPY PhylogicSim /phylogicndt/PhylogicSim
 COPY GrowthKinetics /phylogicndt/GrowthKinetics
