@@ -79,6 +79,10 @@ def run_tool(args):
     patient_data.get_arm_level_cn_events()
     patient_data.preprocess_samples()
 
+    if getattr(args, 'remove_private_muts', False):
+        patient_data.flag_private_mutations(present_cutoff=args.private_ccf_cutoff,
+                                            absent_cutoff=args.private_absent_cutoff)
+
     # TODO: how 1D (one sample) is handeled
     DP_Cluster = ClusterEngine.ClusterEngine(patient_data)  # html_out=args.indiv_id + '.html')
 
@@ -110,5 +114,10 @@ def run_tool(args):
         args.cluster_ccf_file = '{}.cluster_ccfs.txt'.format(patient_data.indiv_name)
         args.mutation_ccf_file = '{}.mut_ccfs.txt'.format(patient_data.indiv_name)
         args.n_iter = args.iter
-        args.blacklist_cluster = None
+        # Auto-blacklist any dedicated private-mutation clusters (see flag_private_mutations /
+        # _assign_private_clusters) from BuildTree, in addition to whatever the user passed in.
+        # NOTE: this used to unconditionally reset to None, discarding any user-supplied
+        # --blacklist_cluster ids when chaining Cluster -> BuildTree in one invocation.
+        private_cluster_ids = [str(c) for c in getattr(DP_Cluster.results, 'private_cluster_ids', [])]
+        args.blacklist_cluster = (args.blacklist_cluster or []) + private_cluster_ids
         BuildTree.BuildTree.run_tool(args)

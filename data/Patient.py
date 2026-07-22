@@ -90,6 +90,10 @@ class Patient:
 
         self.unclustered_muts = []
 
+        # Mutations flagged by flag_private_mutations() as private to a single sample; each entry is
+        # {'var_str': ..., 'muts': [per-sample SomMutation, in sample_list order], 'private_sample_index': i}
+        self.private_mutations = []
+
         self.concordant_cn_tree = {chrom: IntervalTree() for chrom in list(map(str, range(1, 23))) + ['X', 'Y']}
 
         # BuildTree
@@ -300,6 +304,61 @@ class Patient:
             sample.concordant_with_samples = self.sample_list
         # turn on concordance flag when new sample mut are joined
         self.samples_synchronized = True
+
+    def flag_private_mutations(self, present_cutoff=0.15, absent_cutoff=0.05):
+        """
+        Identify mutations that are confidently present in exactly one sample (CCF posterior mode
+        >= present_cutoff) and confidently absent in every other sample (CCF posterior mode <=
+        absent_cutoff) -- the expected profile of a mutation private to one sample after
+        forcecalling has given it a real (non-imputed) CCF distribution everywhere.
+
+        With many samples, a handful of such per-sample-private mutations, once pooled into a
+        shared DP cluster, average out to a diffuse near-zero CCF in every sample that is easily
+        confused with a genuinely shared low-CCF subclone (see discussion). To avoid that, these
+        mutations are pulled out of every sample's concordant_variants here -- and therefore out of
+        the DP's input histogram -- *before* clustering runs. Cluster/ClusterEngine.py's
+        _assign_private_clusters() re-adds them afterward as dedicated per-sample clusters that
+        never participate in the DP and are auto-blacklisted from BuildTree.
+
+        Must be called after preprocess_samples().
+        """
+        if not self.samples_synchronized:
+            logging.error("Cannot flag private mutations before preprocess_samples() has run.")
+            return
+
+        self.private_mutations = []
+        n_samples = len(self.sample_list)
+        if n_samples < 2:
+            return
+
+        grid_size = self.ccf_grid_size
+        private_var_strs = set()
+
+        for mut in list(self.sample_list[0].concordant_variants):
+            var_str = mut.var_str
+            per_sample_mut = [sample.get_mut_by_varstr(var_str) for sample in self.sample_list]
+            per_sample_ccf = [np.argmax(m.ccf_1d) / float(grid_size - 1) for m in per_sample_mut]
+
+            present_idx = [i for i, ccf in enumerate(per_sample_ccf) if ccf >= present_cutoff]
+            if len(present_idx) != 1:
+                continue
+            private_idx = present_idx[0]
+            if all(ccf <= absent_cutoff for i, ccf in enumerate(per_sample_ccf) if i != private_idx):
+                private_var_strs.add(var_str)
+                self.private_mutations.append({
+                    'var_str': var_str,
+                    'muts': per_sample_mut,
+                    'private_sample_index': private_idx,
+                })
+
+        if private_var_strs:
+            for sample in self.sample_list:
+                sample.concordant_variants = [mut for mut in sample.concordant_variants
+                                              if mut.var_str not in private_var_strs]
+            logging.info(
+                "Flagged {} mutations as sample-private (present_cutoff={}, absent_cutoff={}); "
+                "excluded from DP clustering input.".format(
+                    len(private_var_strs), present_cutoff, absent_cutoff))
 
     def _make_ND_histogram(self):
         if not self.samples_synchronized:

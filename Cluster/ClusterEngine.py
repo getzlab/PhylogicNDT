@@ -45,6 +45,7 @@ class ClusterEngine:
         self.results = clustering.results
         self._ND_cluster_postprocess()  # Set cluster assignment, etc.
         self._ND_assign_setaside_mutations()
+        self._assign_private_clusters()
 
     def _ND_cluster_postprocess(self, clonal_cutoff=0.9):
         assign = self.results["assign"]
@@ -96,7 +97,7 @@ class ClusterEngine:
             mut_row = []
             if 'WGD' in mut.var_str:
                        for sample in data.sample_list:
-                            print sample.WGD_status
+                            print(sample.WGD_status)
                        for sample in data.sample_list:
                             mut_row.append(sample.get_mut_by_varstr(mut.var_str))
             if len(mut_row) < len(data.sample_names):
@@ -159,6 +160,76 @@ class ClusterEngine:
 
         logging.info("Re-added {} low coverage mutations and indels, of {} that were removed.".format(muts_added, len(combined_lowcov.union(combined_cnvs))))
 
+    def _assign_private_clusters(self):
+        """
+        Re-add mutations flagged by Patient.flag_private_mutations() as private to a single sample.
+        Each originating sample gets one dedicated cluster (created lazily, on first use), built from
+        real per-sample CCF data rather than DP participation -- modeled on
+        _ND_assign_setaside_mutations, but assigned to brand-new cluster ids instead of matched to an
+        existing DP cluster, since by construction these mutations shouldn't be pooled with anything.
+
+        The new cluster ids are recorded in self.results['private_cluster_ids'] so callers (see
+        Cluster/Cluster.py) can auto-blacklist them from BuildTree -- they remain fully visible in the
+        mutation-level CCF report/table, they just never become tree nodes/branches.
+        """
+        data = self.patient
+        results = self.results
+        results.private_cluster_ids = []
+
+        private_mutations = getattr(data, 'private_mutations', [])
+        if not private_mutations:
+            return
+
+        grid_size = data.sample_list[0].ccf_grid_size
+        n_samples = len(data.sample_list)
+
+        # clust_CCF_dens is a tuple of (n_samples, grid_size) arrays, one per existing cluster;
+        # convert to a list so new cluster densities can be appended.
+        clust_CCF_dens = list(results["clust_CCF_dens"])
+        nclusters = len(clust_CCF_dens)
+
+        private_cluster_id_by_sample = {}
+        muts_added = 0
+
+        for entry in private_mutations:
+            muts = entry['muts']
+            private_idx = entry['private_sample_index']
+
+            if private_idx not in private_cluster_id_by_sample:
+                nclusters += 1
+                new_cluster_id = nclusters
+                private_cluster_id_by_sample[private_idx] = new_cluster_id
+                results.private_cluster_ids.append(new_cluster_id)
+
+                # Real CCF histogram in the private sample; a confident spike at CCF=0 everywhere
+                # else, so this cluster displays as a genuine single-sample peak, not a fabricated
+                # multi-sample profile.
+                cluster_density = []
+                for smpl_index in range(n_samples):
+                    if smpl_index == private_idx:
+                        cluster_density.append(np.array(muts[smpl_index].ccf_1d, dtype=np.float32))
+                    else:
+                        zero_hist = np.zeros(grid_size, dtype=np.float32)
+                        zero_hist[0] = 1.0
+                        cluster_density.append(zero_hist)
+                clust_CCF_dens.append(np.array(cluster_density))
+
+            cluster_id = private_cluster_id_by_sample[private_idx]
+            for sample_index, sample in enumerate(data.sample_list):
+                mut = muts[sample_index]
+                mut.cluster_assignment = cluster_id
+                mut.private_mutation_status = True
+                sample.concordant_variants.append(mut)
+
+            self.results["assign"] = np.append(self.results["assign"], cluster_id)
+            self.results["var_loc"] = np.append(self.results["var_loc"], np.zeros(n_samples * grid_size))
+            muts_added += 1
+
+        results["clust_CCF_dens"] = clust_CCF_dens
+
+        logging.info(
+            "Assigned {} private mutations to {} new dedicated per-sample clusters: {}".format(
+                muts_added, len(private_cluster_id_by_sample), sorted(results.private_cluster_ids)))
 
     def _build_common_sample_clone_table(self):
         data = self.patient

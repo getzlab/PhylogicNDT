@@ -170,6 +170,34 @@ def build_parser():
                             default=8,
                             help='Mutations with coverage lower than this will not be used to cluster and instead re-assigned after dp clustering')
 
+    # Sample-private mutations: detect mutations confidently present in exactly one sample and
+    # confidently absent (near-zero CCF) in every other sample (typically after forcecalling),
+    # remove them from the DP input, and re-add them afterward as dedicated per-sample clusters
+    # that are automatically blacklisted from BuildTree (still visible in CCF plots/reports).
+    clustering.add_argument('--remove_private_muts', '-rpm',
+                            action="store_true",
+                            dest='remove_private_muts',
+                            help='Detect mutations private to a single sample and exclude them from the '
+                                 'Dirichlet Process clustering; they are re-added afterward as dedicated '
+                                 'per-sample clusters, auto-blacklisted from BuildTree.')
+
+    clustering.add_argument('--private_mut_ccf_cutoff',
+                            type=float,
+                            action='store',
+                            dest='private_ccf_cutoff',
+                            default=0.15,
+                            help='CCF (posterior mode) at or above which a mutation is considered present in a '
+                                 'sample, for private-mutation detection (used with --remove_private_muts).')
+
+    clustering.add_argument('--private_mut_absent_cutoff',
+                            type=float,
+                            action='store',
+                            dest='private_absent_cutoff',
+                            default=0.05,
+                            help='CCF (posterior mode) at or below which a forcecalled mutation is considered '
+                                 'confidently absent in a sample, for private-mutation detection '
+                                 '(used with --remove_private_muts).')
+
     clustering.add_argument('--cancer_type', '-ct',
                             type=str,
                             action='store',
