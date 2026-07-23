@@ -196,8 +196,14 @@ class SomMutation:
         return self.var_str
 
     def clean_local_cn(self, cn1, cn2):
-        self.local_cn_a1 = float(cn1) if not np.nan else np.nan
-        self.local_cn_a2 = float(cn2) if not np.nan else np.nan
+        # NOTE: this used to be `float(cn1) if not np.nan else np.nan` -- np.nan is truthy, so
+        # `not np.nan` was always False, meaning local_cn_a1/a2 were unconditionally set to NaN and
+        # cn1/cn2 were silently discarded regardless of their real value. Fixed to actually check
+        # for NaN input instead of a constant.
+        cn1 = float(cn1)
+        cn2 = float(cn2)
+        self.local_cn_a1 = cn1 if not np.isnan(cn1) else np.nan
+        self.local_cn_a2 = cn2 if not np.isnan(cn2) else np.nan
 
     # update allelic copy number AND assignment of mutation to a copy number event (arm level)
     def _phase_mutation(self, bam_file):

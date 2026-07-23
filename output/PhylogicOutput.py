@@ -854,20 +854,25 @@ class PhylogicOutput(object):
         """
         raise NotImplementedError
 
-    def write_patient_cluster_ccfs(self, patient, cluster_ccfs, aliases=None):
+    def write_patient_cluster_ccfs(self, patient, cluster_ccfs, aliases=None, filename=None):
         """
         Serialize cluster ccfs
         Args:
             patient: Patient instance
             cluster_ccfs: maps cluster ID to ccf histogram list (corresponding to samples in patient.sample_list)
             aliases: list of sample aliases (corresponding to samples in patient.sample_list)
+            filename: output path; defaults to '{indiv_name}.cluster_ccfs.txt' as before. Pass an
+                explicit filename to write an additional/alternate cluster CCF table (e.g. a
+                CorrectBias-adjusted version) without overwriting the default output.
         """
         header = ['Patient_ID', 'Sample_ID', 'Sample_Alias', 'Cluster_ID', 'postDP_ccf_mean', 'postDP_ccf_CI_low',
                   'postDP_ccf_CI_high']
         header.extend('postDP_ccf_{}'.format(float(x) / 100) for x in range(101))
         if aliases is None:
             aliases = ('',)*len(patient.sample_list)
-        with open('{}.cluster_ccfs.txt'.format(patient.indiv_name), 'w') as f:
+        if filename is None:
+            filename = '{}.cluster_ccfs.txt'.format(patient.indiv_name)
+        with open(filename, 'w') as f:
             f.write('\t'.join(header))
             for cluster in cluster_ccfs:
                 for i, sample in enumerate(patient.sample_list):

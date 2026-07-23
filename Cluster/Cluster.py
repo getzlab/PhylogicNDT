@@ -104,6 +104,14 @@ def run_tool(args):
     phylogicoutput.plot_1d_clusters('{}.cluster_ccfs.txt'.format(patient_data.indiv_name))
     phylogicoutput.plot_1d_mutations('{}.mut_ccfs.txt'.format(patient_data.indiv_name))
 
+    if getattr(args, 'correct_bias', False):
+        import data.CorrectBias as CorrectBias
+        corrected_cluster_ccfs = CorrectBias.apply_wcc_correction(
+            patient_data, cluster_ccfs, low_ccf_threshold=args.correct_bias_ccf_threshold)
+        phylogicoutput.write_patient_cluster_ccfs(
+            patient_data, corrected_cluster_ccfs,
+            filename='{}.cluster_ccfs.corrected.txt'.format(patient_data.indiv_name))
+
     if not args.buildtree:  # run only Clustering tool
         phylogicoutput.generate_html_from_clustering_results(patient_data.ClusteringResults, patient_data,
                                                              drivers=patient_data.driver_genes,

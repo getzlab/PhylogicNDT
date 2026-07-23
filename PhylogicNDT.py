@@ -226,6 +226,27 @@ def build_parser():
                             default=3,
                             help='parameter mu of the negative binomial prior over number of clusters')
 
+    # CorrectBias: winner's-curse / detection-limit correction for low-CCF clusters. Most mutation
+    # callers cannot reliably detect low-allele-fraction variants; this preferentially misses the
+    # lowest-CCF mutations in a subclone, biasing that cluster's apparent CCF upward. CorrectBias
+    # simulates the detection process at each sample's real purity/coverage/local-CN profile to
+    # estimate and correct for this bias in low-CCF cluster estimates specifically.
+    clustering.add_argument('--correct_bias',
+                            action="store_true",
+                            dest='correct_bias',
+                            help="Fit and apply a per-sample winner's-curse/detection-bias correction "
+                                 '(PhylogicNDT CorrectBias) to low-CCF cluster estimates after DP clustering. '
+                                 'Writes an additional {indiv_id}.cluster_ccfs.corrected.txt alongside the '
+                                 'normal output; does not change mutation-to-cluster assignments.')
+
+    clustering.add_argument('--correct_bias_ccf_threshold',
+                            type=float,
+                            action='store',
+                            dest='correct_bias_ccf_threshold',
+                            default=0.15,
+                            help='Only cluster CCF values below this threshold (in a given sample) are '
+                                 'adjusted by --correct_bias; clusters/samples at or above it are left as-is.')
+
     clustering.add_argument('--order_by_timepoint',
                             action='store_true',
                             dest='order_by_timepoint',
