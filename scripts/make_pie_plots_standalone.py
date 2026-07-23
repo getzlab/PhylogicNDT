@@ -200,43 +200,71 @@ def safe_cluster_color(cluster_id):
     return ClusterColors.get_hex_string(cluster_id % n)
 
 
-def make_pie_plot_standalone(tree, cluster_abundances, outdir='', sample='', dpi=150):
+def make_pie_plot_standalone(tree, cluster_abundances, outdir='', sample='', dpi=150,
+                             negative_tolerance=1e-6):
     """
     Build pie plot for one sample (same logic as PhylogicOutput.make_pie_plot but
     uses safe color for any cluster id).
     Returns base64-encoded PNG string.
+
+    Raises ValueError if a cluster in the tree has no abundance entry for this sample, or if the
+    abundances imply a negative pie slice for some cluster -- the latter usually means a
+    hand-edited tree topology is inconsistent with the original CCF data for this particular
+    sample (e.g. a child reparented such that its cumulative abundance now exceeds its new
+    parent's, violating the pigeonhole principle the tree was originally built under). Both are
+    reported with enough detail to identify the offending cluster/sample rather than surfacing a
+    raw matplotlib error.
     """
     plt.figure(figsize=(1, 1))
-    ax = plt.gca()
-    pie_slices = {}
-    node_order = list(tree.traverse_by_branch())
-    for level, clusters in enumerate(tree.traverse_by_level()):
-        for node in clusters:
-            nid = node.identifier
-            if nid not in cluster_abundances:
-                raise ValueError('Cluster {} missing in abundances for sample "{}".'.format(nid, sample))
-            pie_slices[node] = cluster_abundances[nid]
-            if node.parent:
-                pie_slices[node.parent] -= cluster_abundances[nid]
-        x = []
-        colors = []
-        for node in node_order:
-            if node in pie_slices:
-                x.append(pie_slices[node])
-                colors.append(safe_cluster_color(node.identifier))
-        ax.pie(x, colors=colors, radius=.9 - (.1 * level))
-    ax.set_axis_off()
-    plt.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
-    plt.margins(0, 0)
-    ax.xaxis.set_major_locator(plt.NullLocator())
-    ax.yaxis.set_major_locator(plt.NullLocator())
-    bytes_io = BytesIO()
-    plt.savefig(bytes_io, bbox_inches='tight', pad_inches=0., transparent=True, dpi=dpi)
-    if outdir and sample:
-        os.makedirs(outdir, exist_ok=True)
-        plt.savefig(os.path.join(outdir, '{}.pie_plot.svg'.format(sample)), format='svg')
-    plt.close()
-    return base64.b64encode(bytes_io.getvalue()).decode('UTF-8')
+    try:
+        ax = plt.gca()
+        pie_slices = {}
+        node_order = list(tree.traverse_by_branch())
+        for level, clusters in enumerate(tree.traverse_by_level()):
+            for node in clusters:
+                nid = node.identifier
+                if nid not in cluster_abundances:
+                    raise ValueError('Cluster {} missing in abundances for sample "{}".'.format(nid, sample))
+                pie_slices[node] = cluster_abundances[nid]
+                if node.parent:
+                    pie_slices[node.parent] -= cluster_abundances[nid]
+
+            negative = [(node.identifier, pie_slices[node]) for node in node_order
+                       if node in pie_slices and pie_slices[node] < -negative_tolerance]
+            if negative:
+                detail = ', '.join('cluster {} = {:.4g}'.format(nid, val) for nid, val in negative)
+                raise ValueError(
+                    'Negative pie slice(s) for sample "{}": {}. This usually means the tree '
+                    "topology is inconsistent with this sample's abundance data -- e.g. a "
+                    "hand-edited parent/child relationship where a child's abundance exceeds its "
+                    'new parent\'s, violating the pigeonhole principle the original tree was built '
+                    'under.'.format(sample, detail))
+
+            x = []
+            colors = []
+            for node in node_order:
+                if node in pie_slices:
+                    # Clip any within-tolerance negative floating-point noise to exactly 0, since
+                    # genuinely negative values (beyond tolerance) were already raised above.
+                    x.append(max(pie_slices[node], 0.))
+                    colors.append(safe_cluster_color(node.identifier))
+            ax.pie(x, colors=colors, radius=.9 - (.1 * level))
+        ax.set_axis_off()
+        plt.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
+        plt.margins(0, 0)
+        ax.xaxis.set_major_locator(plt.NullLocator())
+        ax.yaxis.set_major_locator(plt.NullLocator())
+        bytes_io = BytesIO()
+        plt.savefig(bytes_io, bbox_inches='tight', pad_inches=0., transparent=True, dpi=dpi)
+        if outdir and sample:
+            os.makedirs(outdir, exist_ok=True)
+            plt.savefig(os.path.join(outdir, '{}.pie_plot.svg'.format(sample)), format='svg')
+        return base64.b64encode(bytes_io.getvalue()).decode('UTF-8')
+    finally:
+        # Always close the figure, even on a raised ValueError -- otherwise, now that main() no
+        # longer aborts on the first per-sample failure, repeated failures across many samples
+        # would leak an unbounded number of open matplotlib figures in one process.
+        plt.close()
 
 
 def main():
@@ -261,16 +289,29 @@ def main():
         sys.exit(1)
 
     sample_ids = args.samples if args.samples is not None else sorted(abundances.keys())
+    failed_samples = []
     for s in sample_ids:
         if s not in abundances:
             print('Sample "{}" not in abundances file, skipping.'.format(s), file=sys.stderr)
+            failed_samples.append(s)
             continue
         try:
             make_pie_plot_standalone(tree, abundances[s], outdir=args.outdir, sample=s)
             print('Wrote {}.pie_plot.svg'.format(s))
         except ValueError as e:
+            # Don't let one bad sample -- e.g. a hand-edited tree that's only inconsistent with
+            # this particular sample's abundance data -- block every other sample from being
+            # plotted. Report it and keep going; still exit non-zero at the end so scripted/CI
+            # callers can detect a partial failure.
             print('Error for sample "{}": {}'.format(s, e), file=sys.stderr)
-            sys.exit(1)
+            failed_samples.append(s)
+            continue
+
+    if failed_samples:
+        print('Done with errors. {}/{} samples failed: {}. Plots for the rest are in {}'.format(
+            len(failed_samples), len(sample_ids), ', '.join(map(str, failed_samples)), args.outdir),
+            file=sys.stderr)
+        sys.exit(1)
 
     print('Done. Plots in {}'.format(args.outdir))
 
