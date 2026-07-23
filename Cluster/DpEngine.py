@@ -41,7 +41,7 @@ else:
 class DpEngine:
 
     def __init__(self, data, N_iter, Pi_k, use_fixed=False, co_assign_flag=False, ignore_nan=False, tsne=True,
-                 mode=None, seed=None):
+                 mode=None, seed=None, prior_strength=1.0):
         if seed is not None:
             random.seed(seed)
             np.random.seed(seed=seed)
@@ -68,12 +68,18 @@ class DpEngine:
 
         DP_prior = init_dp_prior(len(data._hist_array), Pi_k)
 
-        Pi_gamma_a = DP_prior["a"]
-        Pi_gamma_b = DP_prior["b"]
+        # Scaling both a and b by the same factor leaves the Gamma(a, b) prior's mean (a/b) exactly
+        # unchanged (so it still targets the same Pi_k_mu/Pi_k_r-derived belief about K) while shrinking
+        # its variance (a/b^2) by 1/prior_strength -- i.e. "the same belief, backed by prior_strength
+        # times as much confidence" in the pseudo-count sense, without touching the fitting logic above
+        # or the resampling math in sample_gamma_cond_N_k at all.
+        Pi_gamma_a = DP_prior["a"] * prior_strength
+        Pi_gamma_b = DP_prior["b"] * prior_strength
 
         self.gamma_prior = [Pi_gamma_a, Pi_gamma_b]
 
-        logging.info("Calculated gamma prior for alpha as a={},b={}".format(Pi_gamma_a, Pi_gamma_b))
+        logging.info("Calculated gamma prior for alpha as a={},b={} (prior_strength={})".format(
+            Pi_gamma_a, Pi_gamma_b, prior_strength))
 
         self.alpha = stats.gamma.rvs(Pi_gamma_a, scale=1. / Pi_gamma_b)
 

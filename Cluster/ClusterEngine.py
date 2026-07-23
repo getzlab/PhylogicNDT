@@ -30,7 +30,10 @@ class ClusterEngine:
         self.common_mutations = collections.OrderedDict()
         self.common_subclones = collections.OrderedDict()
 
-    def run_DP_ND(self, N_iter=5, PriorK=None, use_fixed=False, mode="tree", seed=None):
+    def run_DP_ND(self, N_iter=250, PriorK=None, use_fixed=False, mode="tree", seed=None, prior_strength=1.0):
+        # NOTE: N_iter default was previously 5 here (vs. the CLI's actual default of 250, always
+        # passed explicitly by Cluster.py) -- a landmine for any direct caller of this method that
+        # relied on the default. Aligned to match the CLI default.
 
         if use_fixed:
             logging.error("Fixed mutations not configured for ND, proceed with caution.")
@@ -41,7 +44,7 @@ class ClusterEngine:
             PriorK = {'r': 10, 'mu': 10}  # standard values
 
         nd_hist = self.patient._make_ND_histogram()
-        clustering = DpEngine(nd_hist, N_iter, PriorK, seed=seed)
+        clustering = DpEngine(nd_hist, N_iter, PriorK, seed=seed, prior_strength=prior_strength)
         self.results = clustering.results
         self._ND_cluster_postprocess()  # Set cluster assignment, etc.
         self._ND_assign_setaside_mutations()

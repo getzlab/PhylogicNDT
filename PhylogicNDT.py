@@ -226,6 +226,30 @@ def build_parser():
                             default=3,
                             help='parameter mu of the negative binomial prior over number of clusters')
 
+    # Pi_k_mu/Pi_k_r only shape the MEAN/VARIANCE of the target distribution over K; nothing controls
+    # how strongly that belief is held independent of its shape. Since alpha is re-resampled every
+    # iteration from the current chain state (shape ~ a + realized_k, rate ~ b + log(N)), the fixed
+    # (a, b) fit from Pi_k_mu/Pi_k_r becomes a proportionally smaller share of that resampling as
+    # mutation burden/realized cluster count grow -- which is why tuning Pi_k_mu/Pi_k_r alone often has
+    # little visible effect on complex, high-sample-count datasets. --Pi_k_strength scales the fitted
+    # (a, b) by a constant factor: for a Gamma(a, b) prior, this leaves the MEAN (a/b, i.e. what you
+    # believe about K) unchanged while shrinking the VARIANCE (a/b^2) -- exactly the "same belief, held
+    # with more confidence" pseudo-count semantic, and it keeps alpha fully resampled/data-adaptive
+    # every iteration (nothing is frozen), just harder to drag away from your stated prior.
+    clustering.add_argument('--Pi_k_strength',
+                            type=float,
+                            action='store',
+                            dest='Pi_k_strength',
+                            default=1.0,
+                            help='Multiplier (>= 1) on the fitted (a, b) gamma-prior parameters derived from '
+                                 '--Pi_k_mu/--Pi_k_r, before they are used to resample alpha every DP iteration. '
+                                 'Default 1.0 reproduces current behavior. Increase this (try 5, 20, 100...) if '
+                                 'tuning --Pi_k_mu/--Pi_k_r has little visible effect on the realized number of '
+                                 'clusters, which happens increasingly often with more samples/mutations since '
+                                 'the prior otherwise gets diluted by the growing realized-K and log(N) terms in '
+                                 'the per-iteration alpha resampling. Preserves the mean of your stated K belief '
+                                 'exactly; only increases how firmly it is held.')
+
     clustering.add_argument('--order_by_timepoint',
                             action='store_true',
                             dest='order_by_timepoint',

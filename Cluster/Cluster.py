@@ -87,7 +87,8 @@ def run_tool(args):
     DP_Cluster = ClusterEngine.ClusterEngine(patient_data)  # html_out=args.indiv_id + '.html')
 
     DP_Cluster.run_DP_ND(N_iter=args.iter, PriorK={'r': args.Pi_k_r, 'mu': args.Pi_k_mu},
-                         mode="maxpear", seed=args.seed)
+                         mode="maxpear", seed=args.seed,
+                         prior_strength=getattr(args, 'Pi_k_strength', 1.0))
 
     patient_data.ClusteringResults = DP_Cluster.results
     patient_data.cluster_temp_removed()
