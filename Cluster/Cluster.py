@@ -119,6 +119,10 @@ def run_tool(args):
         # _assign_private_clusters) from BuildTree, in addition to whatever the user passed in.
         # NOTE: this used to unconditionally reset to None, discarding any user-supplied
         # --blacklist_cluster ids when chaining Cluster -> BuildTree in one invocation.
+        # NOTE 2: --blacklist_cluster is only defined as a CLI arg on the BuildTree subparser, not
+        # on Cluster's -- so when running the combined Cluster+BuildTree flow (-rb), args never
+        # has a blacklist_cluster attribute at all (not just None), and a direct args.blacklist_cluster
+        # read raised AttributeError. Use getattr with a default instead.
         private_cluster_ids = [str(c) for c in getattr(DP_Cluster.results, 'private_cluster_ids', [])]
-        args.blacklist_cluster = (args.blacklist_cluster or []) + private_cluster_ids
+        args.blacklist_cluster = (getattr(args, 'blacklist_cluster', None) or []) + private_cluster_ids
         BuildTree.BuildTree.run_tool(args)
