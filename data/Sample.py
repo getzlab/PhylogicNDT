@@ -392,6 +392,14 @@ class TumorSample:
             return
         logging.info("Getting local cn for each mutation")
         for mut in set(self.mutations).union(set(self.low_coverage_mutations.values())):
+            # low_coverage_mutations mixes real SomMutation instances (indels/low-coverage SNVs)
+            # with CopyNumberEvent instances (arm-level CNV entries, added via
+            # Patient._add_cn_event_to_samples) -- the latter are segment-level (chrN/start/end,
+            # always type=='CNV') and have no .pos, since they aren't a single-point event. They
+            # also aren't used by CorrectBias's simulation (which filters to mut.type == "SNP"
+            # only), so just skip them here rather than annotate.
+            if mut.type == 'CNV':
+                continue
             # update local cn
             overlapping = list(self.CnProfile[mut.chrN][mut.pos])
             if overlapping:
