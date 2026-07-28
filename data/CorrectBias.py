@@ -32,9 +32,18 @@ def simulate_mutations(PURITY, NMUT, ccf, mutations):
 
     clust_dist = np.zeros(501)
 
+    # NOTE: total_mut (below) only increments for mutations that pass every filter in this loop
+    # (SNP type, real coverage, non-NaN local CN, nonzero CN) -- if NONE of `mutations` ever pass
+    # (e.g. every mutation has NaN local_cn_a1/a2, the default state whenever per-mutation local CN
+    # was never annotated), total_mut never increments and this loop runs forever, since itertools.
+    # cycle never raises StopIteration. attempts is a defense-in-depth bound counting every draw
+    # unconditionally, so the loop always terminates regardless of whether any mutation is usable.
     mut_num = 0
     total_mut = 0
-    while mut_num < NMUT and total_mut < 100 * NMUT:
+    attempts = 0
+    max_attempts = 100 * NMUT * 10
+    while mut_num < NMUT and total_mut < 100 * NMUT and attempts < max_attempts:
+        attempts += 1
 
         mut = next(muts_gen)
         if mut.type != "SNP":
@@ -81,12 +90,42 @@ def pre_compute_WCC(sample, max_iter=40):
     could run indefinitely if the simulated detection process oscillated instead of converging
     (most likely near cluster_pos ~ 0, where detection is sparse/discrete). If the cap is hit, the
     best estimate found so far is kept and a warning is logged, rather than a silent/unbounded hang.
+
+    If NO mutation in this sample has usable local copy number annotated (mut.local_cn_a1/a2 not
+    NaN), simulate_mutations can never simulate a single detected mutation, and every one of the 25
+    candidate-position fits below would need its full max_iter budget just to discover that (not
+    hang, since simulate_mutations bounds its own attempts too, but still real wasted work producing
+    a meaningless "fitted" curve from all-zero simulation output). Short-circuit that case up front
+    with an identity (no-op) mapping and a clear warning, instead of running the simulation loop at
+    all. This is the default state for the standard input pipeline today, since per-mutation local
+    copy number is only populated via _get_local_cn_for_each_mut(), which nothing currently calls.
     """
+    identity_x = list(np.logspace(0, 1, 25) / 10. - 0.1) + [1.]
+
+    def _is_eligible(mut):
+        if mut.type != "SNP":
+            return False
+        if (mut.alt_cnt or 0) + (mut.ref_cnt or 0) == 0:
+            return False
+        a1, a2 = mut.local_cn_a1, mut.local_cn_a2
+        if np.isnan(a1) or np.isnan(a2):
+            return False
+        return (a1 + a2) != 0
+
+    if not any(_is_eligible(mut) for mut in sample.concordant_variants):
+        logging.warning(
+            "No mutations in sample {} have usable local copy number annotated (mut.local_cn_a1/"
+            "a2) -- CorrectBias cannot simulate detection bias without it. Skipping correction for "
+            "this sample (identity mapping, no adjustment) instead of running a simulation that "
+            "cannot converge.".format(getattr(sample, 'sample_name', '?')))
+        from scipy.interpolate import interp1d
+        return interp1d(identity_x, identity_x)
+
     logging.info("Pre-computing winner's-curse correction (WCC) for sample {}".format(
         getattr(sample, 'sample_name', '?')))
     corr_y = []
 
-    for obs_cluster_pos in list(np.logspace(0, 1, 25) / 10. - 0.1) + [1.]:
+    for obs_cluster_pos in identity_x:
 
         err = 1
         cluster_pos = obs_cluster_pos
@@ -110,7 +149,7 @@ def pre_compute_WCC(sample, max_iter=40):
 
     logging.info("Done pre-computing WCC for sample {}".format(getattr(sample, 'sample_name', '?')))
 
-    return interp1d(list(np.logspace(0, 1, 25) / 10. - 0.1) + [1.], corr_y)
+    return interp1d(identity_x, corr_y)
 
 
 def apply_wcc_correction(patient_data, cluster_ccfs, low_ccf_threshold=0.15, max_iter=40):
