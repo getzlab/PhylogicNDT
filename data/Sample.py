@@ -381,12 +381,22 @@ class TumorSample:
         return seg_tree
 
     def _get_local_cn_for_each_mut(self):
+        # NOTE: this previously referenced self.seg_profile.merged_seg_tree, which never existed
+        # (only self.CnProfile, set in __init__ via _resolve_CnEvents, does) -- an AttributeError
+        # every time this was called, which is presumably why nothing ever called it. It also
+        # assumed each Interval's .data was a flat [cn1, cn2, ...] sequence; _resolve_CnEvents
+        # actually stores (sample_name, {'cn_a1': ..., 'cn_a2': ..., ...}) tuples in every branch
+        # (absolute/timing_format/alleliccapseg), so cn1, cn2 = data[0:2] would have unpacked the
+        # sample name and the dict, not the copy-number values.
+        if self.CnProfile is None:
+            return
         logging.info("Getting local cn for each mutation")
         for mut in set(self.mutations).union(set(self.low_coverage_mutations.values())):
             # update local cn
-            if len(self.seg_profile.merged_seg_tree[mut.chrN][mut.pos]) > 0:
-                cn1, cn2 = list(self.seg_profile.merged_seg_tree[mut.chrN][mut.pos])[0].data[0:2]
-                mut.clean_local_cn(cn1, cn2)
+            overlapping = list(self.CnProfile[mut.chrN][mut.pos])
+            if overlapping:
+                _, cn_dict = overlapping[0].data
+                mut.clean_local_cn(cn_dict['cn_a1'], cn_dict['cn_a2'])
 
     # ======small class utils====================
     @staticmethod

@@ -106,6 +106,11 @@ def run_tool(args):
 
     if getattr(args, 'correct_bias', False):
         import data.CorrectBias as CorrectBias
+        # Annotate real per-mutation local copy number from each sample's segment profile, since
+        # CorrectBias's detection-bias simulation needs it (mut.local_cn_a1/a2) and nothing else in
+        # the pipeline populates it. Scoped to only run when --correct_bias is actually requested.
+        for sample in patient_data.sample_list:
+            sample._get_local_cn_for_each_mut()
         corrected_cluster_ccfs = CorrectBias.apply_wcc_correction(
             patient_data, cluster_ccfs, low_ccf_threshold=args.correct_bias_ccf_threshold)
         phylogicoutput.write_patient_cluster_ccfs(
