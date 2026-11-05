@@ -593,7 +593,11 @@ class Patient:
                 if not P and not X:
                     yield R
                 else:
-                    for v in P:
+                    # Pivot on the vertex with the most neighbors in P: only P's non-neighbors
+                    # of the pivot need branching. Yields the same maximal cliques but avoids
+                    # ~2^k calls on a clique of size k (shattered segtabs -> OOM / never finishes).
+                    u = max(P | X, key=lambda w: len(P & neighbors[w]))
+                    for v in P - neighbors[u]:
                         for r in _BK(P & neighbors[v], neighbors, R=R | {v}, X=X & neighbors[v]):
                             yield r
                         P = P - {v}
